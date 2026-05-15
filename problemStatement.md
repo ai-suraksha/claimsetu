@@ -1,77 +1,117 @@
-# NHA Hackathon — Problem Statement 01
+# ClaimSetu — Problem Statement
 
-**Source**: https://nha.gov.in/hackathon | https://nha.gov.in/problemStatement1
-**Domain**: PM-JAY Claim Adjudication
-**Submission Format**: Python Notebook (NHA Sandbox Environment)
-
----
-
-## Title
-
-Automatically read mixed-quality healthcare documents, extract key data, detect mandatory visual elements (stamps/signatures), check compliance with Standard Treatment Guidelines (STG) provided by NHA per package code, and produce an explainable **Pass / Conditional / Fail** decision with reasons.
+**Competition**: [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) on Kaggle  
+**Domain**: Public health insurance & equitable healthcare access  
+**Focus**: Explainable claim-review assistance for messy, real-world hospital documentation
 
 ---
 
-## Core Problem Statement
+## Problem
 
-Hospitals submit many documents (scans, photos, PDFs) for claims. These vary in language and quality. The system must:
+Public health insurance schemes process millions of hospital claims. Many arrive as mixed-quality PDFs, scans, photographs, discharge summaries, lab reports, bills, and clinical notes.
 
-- **Read** the documents — even if blurry or in different languages
-- **Extract** important fields: patient name, diagnosis, procedures, amounts
-- **Detect** visual cues: hospital stamp, doctor signature, implant stickers, QR/barcodes
-- **Check** the claim against STG rules: eligibility, diagnostics, length of stay, package logic
-- **Explain** the decision with confidence scores and evidence provenance (page number, bounding box, source doc ID)
-- **Construct an Episode Timeline**: extract admission, investigation, procedure, and discharge dates; order chronologically; check temporal plausibility
-- **Identify** extra or non-required documents submitted with the claim
+Review teams must manually answer three questions:
 
----
+1. **Is the claim packet complete?**
+2. **Does the treatment timeline make clinical and administrative sense?**
+3. **Is there enough evidence to support a safe claim decision?**
 
-## Expected Solution
-
-| Component | Description |
-|-----------|-------------|
-| **Document Intake** | PDFs/images (low to high quality), multilingual |
-| **OCR & Layout Understanding** | Extract text + structure (sections, tables, line items) |
-| **Visual Element Detection** | Stamps, signatures, implant stickers, QR/barcodes, invoice line items |
-| **Data Structuring** | Standard schema: patient, diagnosis, procedures, dates, costs |
-| **Rules Engine** | Encode STG/policy checks: eligibility, contraindications, length of stay, package logic |
-| **Explainability** | Confidence scores + provenance: page number, bounding box, source doc ID |
-| **Decisioning** | Pass / Conditional (needs more info) / Fail with prioritised flags |
+This creates delays, inconsistent reviews, repeated document queries, and avoidable friction between patients, hospitals, and payers—especially in settings where timely reimbursement affects whether care remains accessible.
 
 ---
 
-## Sample Output — Document Classification Table
+## Why this matters
 
-| Claim ID | File | Page | Document Classification | Clinical Rules Checks |
-|----------|------|------|------------------------|-----------------------|
-| CN001 | D1.pdf | 1 | Discharge Summary | Admission date is after surgery date \|\| Clinical rules as per STG are not matching |
-| CN001 | D1.pdf | 2 | Clinical Note | — |
-| CN001 | D1.pdf | 3 | Angioplasty Report | — |
-| CN001 | D2.pdf | 1 | X-Ray | — |
-| CN001 | D3.pdf | 1 | CT Scan | — |
-| CN001 | d4.png | 1 | Patient Photo | — |
-| CN001 | d4.png | 1 | Angioplasty | Not required for clinical or claim validation |
+In low-resource or high-volume settings, claim reviewers often work with:
 
----
+- blurry scanned documents
+- inconsistent document formats and layouts
+- missing signatures, stamps, or supporting reports
+- unclear admission, procedure, and discharge timelines
+- package- or scheme-specific clinical documentation requirements
 
-## Sample Output — Episode Timeline
-
-| Sequence | Event Type | Date | Source Document | Temporal Validity |
-|----------|-----------|------|----------------|-------------------|
-| 1 | Admission | 02-Feb-26 | Discharge Summary | Valid |
-| 2 | Diagnostic Investigation | 02-Feb-26 | CT Scan / X-Ray | Before procedure |
-| 3 | Procedure (Package) | 03-Feb-26 | Angioplasty Report | Valid |
-| 4 | Post-Procedure Monitoring | 04–05-Feb-26 | Clinical Notes | Valid |
-| 5 | Discharge | 06-Feb-26 | Discharge Summary | After treatment |
+A single missing report, ambiguous date, or weak visual evidence can delay reimbursement, trigger back-and-forth with hospitals, and increase administrative burden on both sides of the claim—while patients wait for resolution.
 
 ---
 
-## Scoring
+## Current gap
 
-Minimum qualifying score: **≥ 70%**. Awards for top 3 teams.
+Most document AI systems extract text, but **claim review requires more than OCR**.
 
-| Category | Weightage | Rank 1 | Rank 2 | Rank 3 |
-|----------|-----------|--------|--------|--------|
-| Document Classification | 40% | F1 ≥ 0.95 | 0.90 ≤ F1 < 0.95 | 0.85 ≤ F1 < 0.90 |
-| Rule Creation Logic & Provenance Detection | 40% | F1 ≥ 0.96 | 0.90 ≤ F1 < 0.96 | 0.85 ≤ F1 < 0.90 |
-| Solution Design | 20% | F1 ≥ 0.93 | 0.88 ≤ F1 < 0.93 | 0.80 ≤ F1 < 0.88 |
+A useful system must:
+
+- **classify** documents in a claim packet (discharge summary, lab report, invoice, imaging note, etc.)
+- **extract** key clinical and administrative fields (patient identifiers, diagnosis, procedures, dates, amounts)
+- **detect** visual evidence such as stamps, signatures, stickers, and QR/barcodes
+- **build** an episode timeline from admission through investigation, procedure, monitoring, and discharge
+- **check** package- or scheme-specific rules (eligibility, required diagnostics, length of stay, temporal plausibility)
+- **show provenance** for every finding (source document, page, region, confidence)
+- **keep the final reviewer in control** of adjudication
+
+---
+
+## Objective
+
+Build a **local, explainable claim-review assistant**—powered by Gemma—that converts messy healthcare claim packets into:
+
+- structured evidence (classified documents, extracted fields, detected visual cues)
+- timeline checks (ordered events with temporal validity flags)
+- rule-level findings (pass, gap, or contradiction against configurable package rules)
+- a reviewer-ready **Pass / Conditional / Fail** recommendation with prioritised flags
+
+The system does **not** make autonomous medical or payment decisions. It supports human reviewers by making evidence easier to inspect, verify, and act on.
+
+### Expected capabilities
+
+| Capability | Description |
+|------------|-------------|
+| **Document intake** | PDFs and images across quality levels; multilingual where relevant |
+| **Understanding** | OCR, layout, and multimodal reading of text and visual elements |
+| **Structuring** | Normalised schema: patient, diagnosis, procedures, dates, costs |
+| **Timeline construction** | Admission → investigation → procedure → monitoring → discharge |
+| **Rules & checks** | Configurable package/scheme logic; flag missing or contradictory evidence |
+| **Explainability** | Confidence scores and provenance for every output |
+| **Decision support** | Pass / Conditional (needs more info) / Fail with explainable reasons |
+
+### Illustrative outputs
+
+**Document classification (per claim)**
+
+| Claim ID | File | Page | Document type | Review notes |
+|----------|------|------|---------------|--------------|
+| CLM-001 | D1.pdf | 1 | Discharge summary | Admission date appears after procedure date |
+| CLM-001 | D1.pdf | 2 | Clinical note | — |
+| CLM-001 | D1.pdf | 3 | Procedure report | — |
+| CLM-001 | D2.pdf | 1 | Imaging report | — |
+| CLM-001 | D3.png | 1 | Patient photograph | Not required for claim validation |
+
+**Episode timeline**
+
+| Sequence | Event type | Date | Source document | Temporal check |
+|----------|------------|------|-----------------|----------------|
+| 1 | Admission | 02-Feb-26 | Discharge summary | Valid |
+| 2 | Diagnostic investigation | 02-Feb-26 | Imaging report | Before procedure |
+| 3 | Procedure (package) | 03-Feb-26 | Procedure report | Valid |
+| 4 | Post-procedure monitoring | 04–05-Feb-26 | Clinical notes | Valid |
+| 5 | Discharge | 06-Feb-26 | Discharge summary | After treatment |
+
+---
+
+## Safety and human oversight
+
+The system is designed as a **reviewer co-pilot**, not an autonomous adjudicator.
+
+- It does **not** diagnose patients, interpret radiology images for clinical conclusions, or issue final payment decisions.
+- All outputs are **evidence-backed recommendations** intended for human review.
+- When evidence is missing, weak, contradictory, or low-confidence, the system **escalates** the claim as **Conditional** or **Needs Review** instead of forcing a Pass or Fail.
+
+Reviewers remain accountable for every claim decision. The assistant’s role is to surface structured evidence, highlight gaps, and reduce manual drudgery—not to replace professional judgment or scheme governance.
+
+---
+
+## Design constraints (Gemma 4 Good)
+
+- Run **locally** on consumer hardware where possible; avoid reliance on external APIs for core inference.
+- Use **Gemma** (including multimodal variants where appropriate) as the primary model family.
+- Prioritise **transparency**: every recommendation should be traceable to source documents and rule checks.
+- Optimise for **public good**: faster, fairer, more consistent claim review that reduces friction for patients and providers in publicly funded insurance programmes.
