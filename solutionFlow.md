@@ -35,8 +35,8 @@ Input claim packet
 └────────────┬────────────┘
              ▼
 ┌─────────────────────────┐
-│ Pass / Conditional /    │  → reviewer pack + provenance
-│ Review recommendation   │
+│ PASS / CONDITIONAL /     │  → reviewer pack + provenance
+│ REVIEW recommendation    │
 └────────────┬────────────┘
              ▼
 ┌─────────────────────────┐
@@ -111,7 +111,7 @@ Classification fallback: **E4B first** when filename/OCR rules are insufficient;
 | Field extraction | Patient, diagnosis, dates, procedure, labs | **E4B** page-level; **26B** for claim-level conflict resolution |
 | Timeline reasoning | Admission → investigation → treatment → discharge | **Deterministic code** + **26B** |
 | Rule checks | Package/STG reasoning and explanation | **Gemma 4 26B** |
-| Final recommendation | Pass / Conditional / Review | **Gemma 4 26B** |
+| Final recommendation | PASS / CONDITIONAL / REVIEW | **Gemma 4 26B** |
 | Final audit | Optional deep audit | **Skip 31B** |
 
 ---
@@ -174,7 +174,7 @@ Every field is an **evidence atom** with source document, page, source text, bou
 - minimum confidence threshold  
 - reject weak, contradictory, or unanchored values  
 
-Failed gates → **unverifiable** slots, supporting safe **Conditional** outcomes.
+Rejected gates → **unverifiable** slots, supporting safe **CONDITIONAL** outcomes.
 
 ---
 
@@ -220,10 +220,10 @@ Claim-level timeline interpretation and contradiction surfacing use **Gemma 4 26
 - package / STG rule interpretation  
 - cross-document contradiction analysis  
 - timeline reasoning across the full packet  
-- **Pass / Conditional / Review** recommendation  
+- **PASS / CONDITIONAL / REVIEW** recommendation  
 - human-readable explanation for reviewers  
 
-Each rule finding includes status (pass / fail / conditional / advisory), reason, evidence links, and confidence.
+Each rule finding includes status (pass / not_met / conditional / advisory), reason, evidence links, and confidence.
 
 ---
 
@@ -256,4 +256,4 @@ ClaimSetu does **not** replace adjudicators. Reviewers see what was submitted, w
 | **Tiered cost** | Filename/keywords → E4B → 26B escalation only when needed |
 | **No 31B** | Skipped for reproducibility and demo stability |
 | **Provenance by default** | EvidenceAtom on every material field |
-| **Reviewer sovereignty** | Pass / Conditional / Review as recommendations only |
+| **Reviewer sovereignty** | PASS / CONDITIONAL / REVIEW as recommendations only |

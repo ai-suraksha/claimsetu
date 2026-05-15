@@ -57,7 +57,7 @@ Build a **local, explainable claim-review assistant**—hybrid OCR plus Gemma 4�
 - structured evidence (classified documents, extracted fields, detected visual cues)
 - timeline checks (ordered events with temporal validity flags)
 - rule-level findings (pass, gap, or contradiction against configurable package rules)
-- a reviewer-ready **Pass / Conditional / Fail** recommendation with prioritised flags
+- a reviewer-ready **PASS / CONDITIONAL / REVIEW** recommendation with prioritised flags
 
 The system does **not** make autonomous medical or payment decisions. It supports human reviewers by making evidence easier to inspect, verify, and act on.
 
@@ -72,7 +72,7 @@ The system does **not** make autonomous medical or payment decisions. It support
 | **Timeline construction** | Admission → investigation → procedure → monitoring → discharge |
 | **Rules & checks** | Configurable package/scheme logic; flag missing or contradictory evidence |
 | **Explainability** | Confidence scores and provenance for every output |
-| **Decision support** | Pass / Conditional (needs more info) / Fail with explainable reasons |
+| **Decision support** | PASS / CONDITIONAL (needs more info) / REVIEW with explainable reasons |
 
 ### Illustrative outputs
 
@@ -104,7 +104,7 @@ The system is designed as a **reviewer co-pilot**, not an autonomous adjudicator
 
 - It does **not** diagnose patients, interpret radiology images for clinical conclusions, or issue final payment decisions.
 - All outputs are **evidence-backed recommendations** intended for human review.
-- When evidence is missing, weak, contradictory, or low-confidence, the system **escalates** the claim as **Conditional** or **Needs Review** instead of forcing a Pass or Fail.
+- When evidence is missing, weak, contradictory, or low-confidence, the system **escalates** the claim as **CONDITIONAL** or **REVIEW** instead of forcing a PASS.
 
 Reviewers remain accountable for every claim decision. The assistant’s role is to surface structured evidence, highlight gaps, and reduce manual drudgery—not to replace professional judgment or scheme governance.
 

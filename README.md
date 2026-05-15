@@ -18,7 +18,7 @@ For each claim packet, ClaimSetu helps reviewers answer:
 2. **Does the timeline make sense?** — admission → investigation → procedure → monitoring → discharge, with temporal checks  
 3. **Is there enough evidence for a safe recommendation?** — rule-level findings linked to source pages and fields  
 
-Outputs include a **Pass / Conditional / Review** recommendation, prioritised reasons, missing-evidence list, document classification table, episode timeline, and provenance links—not a final payment or clinical ruling.
+Outputs include a **PASS / CONDITIONAL / REVIEW** recommendation, prioritised reasons, missing-evidence list, document classification table, episode timeline, and provenance links—not a final payment or clinical ruling.
 
 ---
 
@@ -57,7 +57,7 @@ Deterministic validators  →  dates, confidence gates, timeline, required docs
     ↓
 Gemma 4 26B  →  claim-level reasoning, rules, contradictions, recommendation
     ↓
-Pass / Conditional / Review  +  evidence provenance
+PASS / CONDITIONAL / REVIEW  +  evidence provenance
     ↓
 Human reviewer decides
 ```
@@ -75,7 +75,7 @@ Full pipeline detail: [solutionFlow.md](solutionFlow.md) · Problem and safety f
 ClaimSetu is a **reviewer co-pilot**, not an autonomous adjudicator.
 
 - Recommendations are evidence-backed and intended for human verification.  
-- Weak, missing, or contradictory evidence escalates to **Conditional** or **Review** rather than forcing Pass or Fail.  
+- Weak, missing, or contradictory evidence escalates to **CONDITIONAL** or **REVIEW** rather than forcing a PASS.  
 - The system does not diagnose patients, interpret imaging for clinical conclusions, or issue final payment decisions.
 
 ---
@@ -104,6 +104,12 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 | [problemStatement.md](problemStatement.md) | Problem, gap, objective, and safety framing |
 | [solutionFlow.md](solutionFlow.md) | Hybrid OCR + Gemma architecture and pipeline stages |
 | [claimsAssistant.py](claimsAssistant.py) | Claim processing pipeline (implementation) |
+
+---
+
+## Data
+
+This repository does **not** include real patient, hospital, or claim documents. Demo inputs should be user-provided or synthetic. Sample outputs may be included only after removing any personally identifiable or protected health information.
 
 ---
 
