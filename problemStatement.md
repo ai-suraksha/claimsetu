@@ -52,7 +52,7 @@ A useful system must:
 
 ## Objective
 
-Build a **local, explainable claim-review assistant**—powered by Gemma—that converts messy healthcare claim packets into:
+Build a **local, explainable claim-review assistant**—hybrid OCR plus Gemma 4—that converts messy healthcare claim packets into:
 
 - structured evidence (classified documents, extracted fields, detected visual cues)
 - timeline checks (ordered events with temporal validity flags)
@@ -66,7 +66,8 @@ The system does **not** make autonomous medical or payment decisions. It support
 | Capability | Description |
 |------------|-------------|
 | **Document intake** | PDFs and images across quality levels; multilingual where relevant |
-| **Understanding** | OCR, layout, and multimodal reading of text and visual elements |
+| **Document reading** | PaddleOCR + PyTesseract for text, lines, and bounding boxes with provenance |
+| **Evidence understanding** | Gemma 4 E4B for page cleanup, triage, and extraction; Gemma 4 26B for claim-level reasoning |
 | **Structuring** | Normalised schema: patient, diagnosis, procedures, dates, costs |
 | **Timeline construction** | Admission → investigation → procedure → monitoring → discharge |
 | **Rules & checks** | Configurable package/scheme logic; flag missing or contradictory evidence |
@@ -112,6 +113,10 @@ Reviewers remain accountable for every claim decision. The assistant’s role is
 ## Design constraints (Gemma 4 Good)
 
 - Run **locally** on consumer hardware where possible; avoid reliance on external APIs for core inference.
-- Use **Gemma** (including multimodal variants where appropriate) as the primary model family.
-- Prioritise **transparency**: every recommendation should be traceable to source documents and rule checks.
+- Use a **hybrid evidence pipeline**: **PaddleOCR + PyTesseract** for traceable document reading (text, lines, bounding boxes, confidence); **Gemma 4 E4B** for edge-friendly page cleanup, triage, and structured extraction; **Gemma 4 26B** for claim-level reasoning, package rules, and reviewer recommendations.
+- Do **not** use a language model as a black-box OCR replacement — claim review requires auditable provenance at the line level.
+- Do **not** rely on **Gemma 4 31B** for this submission — prioritise stable demo, reproducible outputs, and practical local execution.
+- Prioritise **transparency**: every recommendation traceable to source documents, OCR evidence, and rule checks.
 - Optimise for **public good**: faster, fairer, more consistent claim review that reduces friction for patients and providers in publicly funded insurance programmes.
+
+**Architecture summary:** OCR reads → E4B structures → 26B reasons → humans decide.

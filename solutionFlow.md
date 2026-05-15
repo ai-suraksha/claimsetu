@@ -1,276 +1,249 @@
 # Solution Flow
 
-ClaimSetu converts a claim packet into structured, evidence-backed review findings. The pipeline is designed to run **locally** with **Gemma** as the primary model family, prioritising explainability and reviewer control over end-to-end automation.
+ClaimSetu converts a claim packet into structured, evidence-backed review findings.
+
+**ClaimSetu is a hybrid evidence pipeline: OCR reads, E4B structures, 26B reasons, humans decide.**
+
+The pipeline runs **locally**, prioritising explainability, reproducibility, and reviewer control over end-to-end automation.
 
 ---
 
 ## High-level architecture
 
 ```
-Claim packet (PDFs, scans, images)
+Input claim packet
         │
         ▼
-┌───────────────────┐
-│ 1. Document intake │  → page-level records + source references
-└─────────┬─────────┘
-          ▼
-┌───────────────────────────┐
-│ 2. OCR & layout extraction │  → text, lines, bounding boxes, confidence
-└─────────┬─────────────────┘
-          ▼
-┌────────────────────────┐
-│ 3. Document classification │  → tiered doc-type labels per page
-└─────────┬──────────────┘
-          ▼
-┌────────────────────┐
-│ 4. Field extraction   │  → structured fields + EvidenceAtom provenance
-└─────────┬──────────┘
-          ▼
-┌─────────────────────────────┐
-│ 5. Visual evidence detection │  → stamps, signatures, QR, stickers
-└─────────┬───────────────────┘
-          ▼
-┌──────────────────────────────┐
-│ 6. Episode timeline construction │  → ordered events + temporal checks
-└─────────┬────────────────────┘
-          ▼
-┌────────────────────────┐
-│ 7. Rule & package checks │  → pass / fail / conditional / advisory
-└─────────┬──────────────┘
-          ▼
-┌────────────────────┐
-│ 8. Decision generation │  → Pass / Conditional / Fail + reviewer pack
-└─────────┬──────────┘
-          ▼
 ┌─────────────────────────┐
-│ 9. Human-in-the-loop UI  │  → reviewer inspects, verifies, decides
+│ PDF / image ingestion   │  → page-level records + source references
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ PaddleOCR + PyTesseract │  → OCR lines, text, bounding boxes, confidence
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ Gemma 4 E4B (edge layer)│  → cleanup, triage, classify, extract from noisy text
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ Deterministic validators│  → dates, gates, timeline consistency, required docs
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ Gemma 4 26B (reasoning) │  → rules, contradictions, recommendation, explanation
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ Pass / Conditional /    │  → reviewer pack + provenance
+│ Review recommendation   │
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ Human reviewer          │  → final adjudication
 └─────────────────────────┘
 ```
+
+### Pipeline stages (code-oriented names)
+
+| Stage | Function | Primary tool |
+|-------|----------|--------------|
+| Ingestion | `ocr_extract_pages()` | PDF/image intake + PaddleOCR + PyTesseract |
+| Edge parse | `edge_parse_page_with_e4b()` | Gemma 4 E4B |
+| Validate | `validate_extracted_evidence()` | Deterministic gates |
+| Timeline | `build_episode_timeline()` | Validators + structured evidence |
+| Reason | `reason_claim_with_26b()` | Gemma 4 26B |
+| Output | `generate_reviewer_summary()` | Reviewer pack + provenance |
+
+### Planned configuration
+
+```python
+MODEL_CONFIG = {
+    "edge_model": "gemma4:e4b",
+    "reasoning_model": "gemma4:26b",
+    "use_ocr_engines": True,
+    "use_31b_audit": False,
+}
+```
+
+---
+
+## Model-assisted evidence understanding
+
+ClaimSetu **separates document reading from claim reasoning**.
+
+Traditional OCR engines extract text and layout evidence from claim documents. Gemma models then convert this noisy evidence into structured review findings.
+
+This design avoids black-box document reading and keeps every recommendation grounded in inspectable evidence: source document, page number, extracted text, bounding box, confidence, and extraction method.
+
+**Gemma 4 E4B does not replace OCR.** A VLM-style “read the whole page” pass may recover some text but typically provides weaker line-level provenance and is harder to audit. PaddleOCR and PyTesseract supply the auditable substrate; E4B cleans and structures it.
+
+### Tiered model strategy
+
+ClaimSetu uses a **two-model strategy**:
+
+1. **Edge model (Gemma 4 E4B)** — page-level cleanup, document triage, lightweight classification, and structured extraction from noisy OCR. Keeps the pipeline lightweight and deployable on consumer hardware.
+2. **Reasoning model (Gemma 4 26B)** — claim-level timeline interpretation, package/STG rule checks, contradiction analysis, and final recommendation with human-readable explanation. Invoked when deeper clinical or administrative reasoning is required.
+
+**Why not Gemma 4 31B?** For this submission, 31B adds complexity without enough scoring upside. The stack optimises for a stable demo, clean repo, repeatable outputs, and fast enough local execution. **26B** is the practical “main brain” — stronger than edge models, more reproducible than 31B.
+
+### Escalation rule
+
+When edge confidence is insufficient, escalate to the reasoning model:
+
+```python
+if page_result["confidence"] < 0.75 or page_result["needs_deep_review"]:
+    page_result = reason_with_26b(page_context)
+```
+
+Classification fallback: **E4B first** when filename/OCR rules are insufficient; **26B** when still uncertain.
+
+---
+
+## Model split by stage
+
+| Stage | Use | Model / tool |
+|-------|-----|----------------|
+| Raw text extraction | OCR + bbox provenance | **PaddleOCR + PyTesseract** |
+| OCR cleanup | Fix noisy text into structured fields | **Gemma 4 E4B** |
+| Page triage | Relevant, extra, missing, low-quality? | **Gemma 4 E4B** |
+| Document classification fallback | When filename/OCR rules insufficient | **E4B** first → **26B** if uncertain |
+| Field extraction | Patient, diagnosis, dates, procedure, labs | **E4B** page-level; **26B** for claim-level conflict resolution |
+| Timeline reasoning | Admission → investigation → treatment → discharge | **Deterministic code** + **26B** |
+| Rule checks | Package/STG reasoning and explanation | **Gemma 4 26B** |
+| Final recommendation | Pass / Conditional / Review | **Gemma 4 26B** |
+| Final audit | Optional deep audit | **Skip 31B** |
 
 ---
 
 ## 1. Document intake
 
-**Input** may include:
+**Input** may include PDFs, scanned images, photographs, discharge summaries, lab reports, bills, clinical notes, and procedure documents.
 
-- PDFs
-- scanned images
-- photographed documents
-- discharge summaries
-- lab reports
-- bills
-- clinical notes
-- procedure documents
-
-Each file is normalised into **page-level records** with:
-
-| Field | Purpose |
-|-------|---------|
-| file name | Traceability to original upload |
-| page number | Pinpoint evidence within multi-page files |
-| extracted text | Digital text or promoted OCR text |
-| OCR lines | Line-level text with geometry for anchoring |
-| image metadata | Dimensions, scan quality hints |
-| source references | Stable IDs for provenance links |
-
-Logical documents are grouped when multiple pages belong to the same file or clinical artifact, so downstream steps operate on coherent units while retaining page-level granularity.
+Each file becomes **page-level records** with file name, page number, image metadata, and stable source references. Logical documents are grouped across multi-page files while retaining page-level granularity for provenance.
 
 ---
 
 ## 2. OCR and layout extraction
 
-The system uses a **layered extraction strategy**:
+**PaddleOCR** (primary) and **PyTesseract** (fallback) perform document reading — not Gemma.
 
-1. **Digital PDF text extraction** where native text is available
-2. **OCR** for scanned pages and camera photographs
-3. **Page-level line extraction** with bounding boxes and per-line confidence
-4. **Confidence-aware text promotion** — low-confidence OCR is retained for search but not promoted as canonical without corroboration
+Layered strategy:
 
-This allows the pipeline to handle both clean PDFs and low-quality scans without a single extraction path for every input type.
+1. Digital PDF text extraction where native text exists  
+2. PaddleOCR for scanned pages and images  
+3. PyTesseract when PaddleOCR is unavailable or low-confidence  
+4. Page-level lines with bounding boxes and per-line confidence  
+5. Confidence-aware text promotion — weak OCR retained for search, not promoted as canonical without corroboration  
 
----
-
-## 3. Document classification
-
-Each page is classified into claim-document categories such as:
-
-- discharge summary
-- admission note / indoor case sheet
-- investigation report
-- lab report
-- clinical note
-- bill or administrative document
-- procedure note
-- extra / non-required document
-
-### Tiered classification
-
-To balance accuracy and efficiency, classification runs in tiers:
-
-| Tier | Signal source | When used |
-|------|---------------|-----------|
-| **1** | Filename and metadata hints | High-confidence patterns (e.g. discharge, lab, bill tokens) |
-| **2** | OCR / digital-text keyword signals | Text available but filename ambiguous |
-| **3** | Model-assisted classification | Deterministic tiers insufficient; Gemma multimodal classify+extract |
-
-Lower tiers run first to **reduce model calls** while preserving accuracy on typical hospital naming conventions. Image-only pages classified at Tier 1 still receive **model-assisted field extraction** when text is not available from the PDF layer.
+Outputs feed the edge model as **OCR lines + text + geometry**, preserving auditability.
 
 ---
 
-## 4. Field extraction
+## 3. Gemma 4 E4B — edge page layer
 
-For each document type, the system extracts relevant fields, for example:
+After OCR, **Gemma 4 E4B** runs on page context (noisy text + layout signals). It does **not** re-OCR the document.
 
-- patient name
-- admission date
-- discharge date
-- diagnosis
-- procedure
-- lab values (e.g. haemoglobin where visible)
-- billed amount
-- package-related evidence
-- doctor / hospital identifiers where visible
+| Task | Description |
+|------|-------------|
+| **OCR cleanup** | Normalise garbled lines into cleaner field candidates |
+| **Page triage** | Flag relevant, extra, missing, or low-quality pages |
+| **Lightweight classification** | Fallback when Tier 1–2 deterministic signals are insufficient |
+| **Structured extraction** | Patient, diagnosis, dates, procedure, lab values from noisy text |
 
-### EvidenceAtom provenance
+Deterministic tiers still run **before** E4B where possible:
 
-Every extracted field is stored as an **evidence atom** with:
+| Tier | Signal | When |
+|------|--------|------|
+| **1** | Filename / metadata hints | High-confidence hospital naming patterns |
+| **2** | OCR keyword signals | Text available, filename ambiguous |
+| **3** | **E4B** (then **26B** if uncertain) | Insufficient deterministic confidence |
 
-- source document
-- page number
-- source text snippet
-- bounding box (when available)
-- extraction method (digital text, OCR anchor, model-assisted, etc.)
-- confidence score
+---
 
-### Date acceptance gate
+## 4. Field extraction and EvidenceAtom provenance
 
-Dates are high-risk fields. Before a date enters the timeline or rules engine, it must pass an **acceptance gate**:
+Extracted fields include patient name, admission/discharge dates, diagnosis, procedure, lab values, billed amount, package evidence, and identifiers where visible.
 
-- labelled date field (not free-floating “any date on page”)
-- grounding in source text or trusted extraction method
-- minimum confidence threshold
-- rejection of weak, contradictory, or unanchored values
+Every field is an **evidence atom** with source document, page, source text, bounding box (from OCR), extraction method, and confidence.
 
-Failed gates yield **unverifiable** slots rather than invented dates—supporting safe **Conditional** outcomes when required dates are missing.
+**Date acceptance gate** (deterministic — not delegated to Gemma):
+
+- labelled date field only  
+- grounding in source text or trusted method  
+- minimum confidence threshold  
+- reject weak, contradictory, or unanchored values  
+
+Failed gates → **unverifiable** slots, supporting safe **Conditional** outcomes.
 
 ---
 
 ## 5. Visual evidence detection
 
-The system detects claim-supporting **visual elements**:
-
-- hospital stamp
-- doctor signature
-- QR / barcode
-- implant or device sticker (where applicable)
-- presence of expected report types as visual artifacts
-
-These signals are **supporting evidence**, not standalone proof. They are attached to the claim review pack with the same provenance model as text fields so reviewers can verify what was detected and where.
+Computer-vision detection (e.g. stamps, signatures, QR/barcodes, stickers) runs alongside OCR. Visual hits are **supporting signals** with page/bbox provenance — not standalone proof.
 
 ---
 
-## 6. Episode timeline construction
+## 6. Deterministic validators
 
-The system builds a **chronological treatment timeline**:
+Before claim-level reasoning, **deterministic code** enforces safety:
 
-1. admission  
-2. investigation  
-3. procedure / treatment  
-4. post-treatment monitoring  
-5. discharge  
+- date normalisation  
+- confidence gates and source-text checks  
+- timeline consistency (e.g. discharge before admission → invalid)  
+- required-document presence  
+- rule severity mapping  
 
-### Date sourcing
-
-For each event type, dates are drawn from **priority-ordered document types** (e.g. discharge summary for admission/discharge; procedure report for intervention date). Multiple extraction paths may be attempted in order:
-
-1. OCR **anchor search** on labelled lines (exact → substring → fuzzy, with context window)
-2. Model-assisted **labelled field** extraction with source text
-3. Regex on reliable digital text layers
-4. Cross-field facts when already validated elsewhere
-
-Free-floating “any date visible on the page” is **not** used as a timeline fallback, to avoid report dates or chart noise polluting the episode.
-
-### Temporal validity
-
-Each timeline row carries a validity state, for example:
-
-| State | Meaning |
-|-------|---------|
-| **Valid** | Accepted date, no contradiction |
-| **Invalid** | Logical contradiction (e.g. discharge before admission) |
-| **Unverifiable** | No acceptable date extracted |
-| **Conditional** | Required event date missing for package |
-| **Advisory** | Suspicious pattern (e.g. implausible range) flagged for review |
-
-Weak or ungrounded dates are **rejected or marked unverifiable** rather than forced into the timeline.
+**Gemma explains and reasons over evidence; validators enforce what may proceed.**
 
 ---
 
-## 7. Rule and package checks
+## 7. Episode timeline construction
 
-A **rules engine** evaluates the claim against **package-specific** (or scheme-specific) requirements.
+Chronological episode: admission → investigation → procedure/treatment → post-treatment monitoring → discharge.
 
-Examples of checks:
+- Dates accepted only when passing the acceptance gate  
+- Priority-ordered document types per event  
+- OCR anchor search on labelled lines before model-assisted fields  
+- No “any date on page” fallback  
 
-- required documents present or missing
-- length of stay within expected range
-- diagnosis / procedure consistency
-- required investigation evidence available
-- post-treatment evidence present where needed
-- extra documents identified but not over-weighted in the decision
+Timeline rows carry validity states: **Valid**, **Invalid**, **Unverifiable**, **Conditional**, **Advisory**.
 
-Each rule produces:
-
-| Output | Description |
-|--------|-------------|
-| status | pass / fail / conditional / advisory |
-| reason | Human-readable explanation |
-| evidence source | Linked atoms and documents |
-| confidence | Strength of supporting evidence |
-
-Rules consume structured fields and timeline states—not raw OCR alone—so findings remain auditable.
+Claim-level timeline interpretation and contradiction surfacing use **Gemma 4 26B** on top of validator output.
 
 ---
 
-## 8. Decision generation
+## 8. Gemma 4 26B — claim reasoning layer
 
-The system produces a **reviewer-ready** outcome:
+**Gemma 4 26B** handles work that needs broader context:
+
+- package / STG rule interpretation  
+- cross-document contradiction analysis  
+- timeline reasoning across the full packet  
+- **Pass / Conditional / Review** recommendation  
+- human-readable explanation for reviewers  
+
+Each rule finding includes status (pass / fail / conditional / advisory), reason, evidence links, and confidence.
+
+---
+
+## 9. Decision generation
 
 | Decision | When used |
 |----------|-----------|
 | **PASS** | Evidence sufficient; no major contradictions |
-| **CONDITIONAL** | Claim may be valid but needs clarification or missing evidence |
-| **FAIL / REVIEW** | Major rule mismatch, contradiction, or unsupported claim |
+| **CONDITIONAL** | May be valid but needs clarification or missing evidence |
+| **REVIEW** | Major mismatch, contradiction, or unsupported claim |
 
-### Reviewer pack
-
-The output includes:
-
-- summary decision
-- top reasons (prioritised flags)
-- missing evidence list
-- episode timeline table
-- document classification table
-- reviewer note (suggested queries to hospital or patient)
-- provenance links back to source pages and regions
-
-Internal rule statuses (e.g. advisory, missing slot) roll up into these three reviewer-facing decisions without hiding intermediate detail.
+**Reviewer pack:** summary decision, top reasons, missing evidence, episode timeline, document classification table, reviewer note, provenance links.
 
 ---
 
-## 9. Human-in-the-loop design
+## 10. Human-in-the-loop design
 
-ClaimSetu does **not** replace adjudicators.
+ClaimSetu does **not** replace adjudicators. Reviewers see what was submitted, what was extracted, what rules ran, why the claim was flagged, and what clarification is needed.
 
-It helps reviewers quickly see:
-
-- what documents were submitted
-- what evidence was extracted
-- what rules were checked
-- why a claim was flagged
-- what clarification is needed
-
-The final decision remains with the **human reviewer**. The assistant’s role is to compress reading time, surface contradictions early, and attach defensible provenance—not to auto-approve or auto-deny payment.
+**Demo narrative:** ClaimSetu uses OCR for traceable document reading, an edge model for fast page-level understanding, and a stronger reasoning model for claim-level review. The system never makes a black-box decision — every recommendation links back to extracted evidence.
 
 ---
 
@@ -278,9 +251,9 @@ The final decision remains with the **human reviewer**. The assistant’s role i
 
 | Principle | Implementation |
 |-----------|----------------|
-| **Tiered cost** | Deterministic classification and OCR before model calls |
-| **Provenance by default** | EvidenceAtom on every material field and date |
-| **No silent invention** | Acceptance gate and unverifiable states for weak dates |
-| **Timeline discipline** | Priority sources + temporal validity, not “any date on page” |
-| **Reviewer sovereignty** | Pass / Conditional / Fail as recommendations only |
-| **Local-first** | Core pipeline runnable on consumer hardware with Gemma |
+| **OCR reads, Gemma understands** | PaddleOCR + PyTesseract for provenance; E4B/26B for structure and reasoning |
+| **Deterministic safety** | Gates and validators before and alongside model outputs |
+| **Tiered cost** | Filename/keywords → E4B → 26B escalation only when needed |
+| **No 31B** | Skipped for reproducibility and demo stability |
+| **Provenance by default** | EvidenceAtom on every material field |
+| **Reviewer sovereignty** | Pass / Conditional / Review as recommendations only |

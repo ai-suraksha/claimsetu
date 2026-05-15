@@ -6,6 +6,8 @@ It reads mixed-quality healthcare claim documents, extracts structured evidence,
 
 ClaimSetu is designed for human-in-the-loop review. It does not make autonomous medical, diagnostic, or payment decisions.
 
+**Architecture in one line:** ClaimSetu is a hybrid evidence pipeline — **OCR reads, E4B structures, 26B reasons, humans decide.**
+
 ---
 
 ## What it does
@@ -16,28 +18,55 @@ For each claim packet, ClaimSetu helps reviewers answer:
 2. **Does the timeline make sense?** — admission → investigation → procedure → monitoring → discharge, with temporal checks  
 3. **Is there enough evidence for a safe recommendation?** — rule-level findings linked to source pages and fields  
 
-Outputs include a **Pass / Conditional / Fail** recommendation, prioritised reasons, missing-evidence list, document classification table, episode timeline, and provenance links—not a final payment or clinical ruling.
+Outputs include a **Pass / Conditional / Review** recommendation, prioritised reasons, missing-evidence list, document classification table, episode timeline, and provenance links—not a final payment or clinical ruling.
+
+---
+
+## Why hybrid OCR + Gemma?
+
+ClaimSetu does **not** use a language model as a black-box OCR engine.
+
+Healthcare claim review requires traceability: source document, page number, extracted text, bounding boxes, confidence, and evidence provenance.
+
+Therefore, ClaimSetu uses **PaddleOCR** and **PyTesseract** for document reading, then uses **Gemma 4** models for understanding and reasoning:
+
+| Layer | Role | Tool / model |
+|-------|------|----------------|
+| **Document reading** | Raw text, lines, bounding boxes, confidence | PaddleOCR + PyTesseract |
+| **Edge understanding** | OCR cleanup, page triage, lightweight classification, structured extraction from noisy text | **Gemma 4 E4B** |
+| **Claim reasoning** | Timeline interpretation, package/STG rules, contradictions, reviewer recommendation | **Gemma 4 26B** |
+
+**OCR engines read the document. Gemma understands the claim.**
+
+Gemma 4 E4B is **not** a replacement for the OCR pipeline. It is an edge-friendly layer on top of OCR for cleanup and structuring. Gemma 4 31B is intentionally **not** used — it adds complexity without enough scoring upside for a stable, reproducible demo.
 
 ---
 
 ## How it works
 
-The pipeline runs locally and is documented in [solutionFlow.md](solutionFlow.md):
+```
+Input claim packet
+    ↓
+PDF / image ingestion
+    ↓
+PaddleOCR + PyTesseract  →  OCR lines, text, bounding boxes
+    ↓
+Gemma 4 E4B  →  cleanup, triage, classification fallback, field extraction
+    ↓
+Deterministic validators  →  dates, confidence gates, timeline, required docs
+    ↓
+Gemma 4 26B  →  claim-level reasoning, rules, contradictions, recommendation
+    ↓
+Pass / Conditional / Review  +  evidence provenance
+    ↓
+Human reviewer decides
+```
 
-| Stage | Purpose |
-|-------|---------|
-| Document intake | Normalise PDFs, scans, and images into page-level records |
-| OCR & layout | Digital text, OCR, line boxes, confidence-aware promotion |
-| Classification | Tiered doc-type labelling (metadata → keywords → model) |
-| Field extraction | Structured fields with **EvidenceAtom** provenance |
-| Visual evidence | Stamps, signatures, QR/barcodes, stickers (supporting signals) |
-| Timeline | Chronological episode with date acceptance gates |
-| Rules | Package/scheme checks with pass / fail / conditional / advisory |
-| Decision | Reviewer pack for human adjudication |
+Full pipeline detail: [solutionFlow.md](solutionFlow.md) · Problem and safety framing: [problemStatement.md](problemStatement.md) · Implementation: [`claimsAssistant.py`](claimsAssistant.py).
 
-Primary implementation: [`claimsAssistant.py`](claimsAssistant.py).
+**Escalation:** when E4B page confidence is below threshold or a page needs deep review, that section is escalated to **26B** — keeping the edge model fast while reserving the reasoning model for harder cases.
 
-Problem framing and safety context: [problemStatement.md](problemStatement.md).
+**Safety gates:** date acceptance, source-text checks, temporal validity, and missing-document rules stay in **deterministic code**. Gemma explains and reasons over evidence; validators enforce what may enter the timeline and final recommendation.
 
 ---
 
@@ -46,7 +75,7 @@ Problem framing and safety context: [problemStatement.md](problemStatement.md).
 ClaimSetu is a **reviewer co-pilot**, not an autonomous adjudicator.
 
 - Recommendations are evidence-backed and intended for human verification.  
-- Weak, missing, or contradictory evidence escalates to **Conditional** or **Needs Review** rather than forcing Pass or Fail.  
+- Weak, missing, or contradictory evidence escalates to **Conditional** or **Review** rather than forcing Pass or Fail.  
 - The system does not diagnose patients, interpret imaging for clinical conclusions, or issue final payment decisions.
 
 ---
@@ -55,7 +84,16 @@ ClaimSetu is a **reviewer co-pilot**, not an autonomous adjudicator.
 
 Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) on Kaggle—focused on local, transparent AI that supports equitable access to publicly funded healthcare.
 
-**Design goals:** run on consumer hardware where possible · use **Gemma** (including multimodal variants) for classification and extraction · expose provenance on every material finding · optimise for public-good claim review, not black-box automation.
+**Design goals:** stable demo · clean repo · repeatable outputs · fast enough local execution · clear explanation of why Gemma adds value on top of traceable OCR.
+
+**Model stack (locked):**
+
+| Use | Choice |
+|-----|--------|
+| OCR + bbox provenance | PaddleOCR + PyTesseract |
+| Edge page layer | Gemma 4 E4B |
+| Claim reasoning layer | Gemma 4 26B |
+| Final audit | Skip 31B |
 
 ---
 
@@ -64,8 +102,8 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 | File | Description |
 |------|-------------|
 | [problemStatement.md](problemStatement.md) | Problem, gap, objective, and safety framing |
-| [solutionFlow.md](solutionFlow.md) | Product architecture and pipeline stages |
-| [claimsAssistant.py](claimsAssistant.py) | Claim processing pipeline |
+| [solutionFlow.md](solutionFlow.md) | Hybrid OCR + Gemma architecture and pipeline stages |
+| [claimsAssistant.py](claimsAssistant.py) | Claim processing pipeline (implementation) |
 
 ---
 
