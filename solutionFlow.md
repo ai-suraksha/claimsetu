@@ -35,8 +35,8 @@ Input claim packet
 └────────────┬────────────┘
              ▼
 ┌─────────────────────────┐
-│ PASS / CONDITIONAL /     │  → reviewer pack + provenance
-│ REVIEW recommendation    │
+│ PASS / CONDITIONAL /    │  → reviewer pack + provenance
+│ REVIEW recommendation   │
 └────────────┬────────────┘
              ▼
 ┌─────────────────────────┐

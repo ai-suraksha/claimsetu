@@ -42,7 +42,36 @@ Gemma 4 E4B is **not** a replacement for the OCR pipeline. It is an edge-friendl
 
 ---
 
-## How it works
+## Setup
+
+**Requires**: Python 3.10+, [uv](https://docs.astral.sh/uv/), [Ollama](https://ollama.com), Tesseract OCR binary.
+
+```bash
+# Install dependencies
+uv sync
+
+# Pull Gemma 4 models via Ollama
+ollama pull gemma4:e4b
+ollama pull gemma4:26b
+
+# (Optional) Install Tesseract for OCR fallback
+# macOS:  brew install tesseract
+# Ubuntu: apt-get install tesseract-ocr
+
+# Start the demo UI
+uv run uvicorn app:app --reload
+# → Open http://localhost:8000
+```
+
+Place claim documents under `Data/ps1-dataset/<PACKAGE_CODE>/<CLAIM_ID>/` (see Data section below). The `Data/` folder is git-ignored.
+
+**Run pipeline directly (no UI):**
+
+```bash
+uv run python claimsAssistant.py
+```
+
+---
 
 ```
 Input claim packet
@@ -103,7 +132,9 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 |------|-------------|
 | [problemStatement.md](problemStatement.md) | Problem, gap, objective, and safety framing |
 | [solutionFlow.md](solutionFlow.md) | Hybrid OCR + Gemma architecture and pipeline stages |
-| [claimsAssistant.py](claimsAssistant.py) | Claim processing pipeline (implementation) |
+| [claimsAssistant.py](claimsAssistant.py) | Core claim processing pipeline (OCR → E4B → validators → 26B → reviewer pack) |
+| [app.py](app.py) | FastAPI web app + demo UI (upload files → get PASS/CONDITIONAL/REVIEW) |
+| [pyproject.toml](pyproject.toml) | uv project config and dependencies |
 
 ---
 
