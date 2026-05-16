@@ -1,0 +1,43 @@
+[project]
+name = "claimsetu"
+version = "0.1.0"
+description = "Explainable claim-review assistant for public health insurance — Gemma 4 Good Hackathon"
+requires-python = ">=3.10"
+dependencies = [
+    # Web layer
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "python-multipart>=0.0.9",
+    # Document reading (OCR)
+    "pymupdf>=1.24.0",
+    "pillow>=10.0.0",
+    "opencv-python-headless>=4.9.0",
+    "pytesseract>=0.3.10",
+    # PaddleOCR — primary OCR engine (PP-OCRv4)
+    # Install separately if paddlepaddle wheel is unavailable for your platform:
+    #   pip install paddlepaddle paddleocr
+    "paddlepaddle>=2.6.0",
+    "paddleocr>=2.7.0",
+    # Barcode / QR detection
+    "pyzbar>=0.1.9",
+    # Data + utilities
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "python-dateutil>=2.9.0",
+    "rapidfuzz>=3.9.0",
+    "json-repair>=0.25.0",
+    "nest-asyncio>=1.6.0",
+    # Gemma 4 via Ollama
+    "ollama>=0.2.0",
+]
+
+[project.scripts]
+claimsetu = "app:main"
+
+[tool.uv]
+# uv.lock is committed for reproducibility
+# Run: uv sync && uv run uvicorn app:app --reload
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

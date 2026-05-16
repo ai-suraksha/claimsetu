@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ClaimSetu — local data and outputs (never commit patient/claim documents)
+Data/
+outputs/
