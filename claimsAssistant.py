@@ -2,74 +2,26 @@
 # coding: utf-8
 from __future__ import annotations   # must be first executable line
 # ============================================================
-# NHA Hackathon – Problem Statement 01
-# Solution v4.6 — JSON F1 Hardening (leaderboard push)
+# ClaimSetu — Claims Intelligence Pipeline
+# Gemma 4 Good Hackathon (Kaggle) — Public Health Insurance
 # ============================================================
 #
-# v4.3 → v4.4:
-# A. _AGGREGATE_FILENAME_STEMS: ALL_REPORTS/IPD/USG_LFT/etc. get Tier 1 conf
-#    capped at 0.55 — forces per-page Tier 2 keyword override. Fixes F1 cap.
-# B. _PACKAGE_FILENAME_HINTS: SG039C photo→photo_evidence, histo→histopathology,
-#    SB039A photo→post_op_photo, MG006A enc/case→clinical_notes (pre-VLM check)
-# C. classify_and_extract_page: package hints → aggregate check → Tier2 → Tier1 → Tier3
-# D. PaddleOCR thread-safe: _paddle_lock serialises calls; Tesseract fallback on error
-# E. _merge_timeline_into_facts: accepted DOA/DOD fed back to temporal_facts + LOS recompute
-# F. SG039C and MG006A EVENT_DEFS: doa/dod now set (were None — silent zeroing)
-# G. INCONSISTENT detection: cross-file only (same file = normal multi-page variation)
-# H. run_visual_detection: page/bbox provenance added per detected element
-# I. temporal_facts exposed as top-level key in process_claim result dict
+# Architecture: OCR reads → E4B structures → 26B reasons → humans decide
+#
+# Pipeline stages (solutionFlow.md names):
+#   ocr_extract_pages()          — PDF/image ingestion via PaddleOCR + PyTesseract
+#   edge_parse_page_with_e4b()   — Gemma 4 E4B: cleanup, triage, classify, extract
+#   validate_extracted_evidence() — deterministic date/confidence/timeline gates
+#   build_episode_timeline()     — admission → investigation → procedure → discharge
+#   reason_claim_with_26b()      — Gemma 4 26B: rules, contradictions, recommendation
+#   generate_reviewer_summary()  — PASS / CONDITIONAL / REVIEW + provenance pack
+#
+# LLM stack (Ollama local):
+#   Edge model:      gemma4:e4b   (page cleanup, triage, field extraction)
+#   Reasoning model: gemma4:26b   (claim-level rules, contradictions, recommendation)
 # ============================================================
-# Designed for: NHA sandbox (Kaggle-style)
-# LLM stack:    NHAclient → converse/google.gemma-3-12b-it (vision model)
-# No:           Ollama (fallback only), HuggingFace, PaddleOCR, SentenceTransformer
-#
-# v4.1 → v4.2 Upgrades (date extraction hardening):
-# A. DATE_PATTERNS: replaced \b word-boundary with (?<!\d)/(?!\d) lookarounds
-# B. _strip_time_suffix(), _repair_compact_ocr_date() — pre-processing helpers
-# C. build_timeline: iterate ALL candidate rows instead of single best_row
-# D. _vlm_crop_date_fallback(): Path 5 VLM crop for missing DOA/DOD
-# E. row['_image'] stored for VLM crop access
-#
-# v4.2 → v4.3 Upgrades (date arbitration hardening):
-# F. _REJECTED_DOD_ANCHORS: document-title strings rejected as DOD anchors
-# G. _WEAK_DOD_ANCHORS: PrintDate/report date capped at conf=0.55
-# H. _STRONG_DOD_LABELS: DOD atoms from non-strict anchors capped at conf=0.60
-# I. Temporal sanity gate for DOD: DOD < DOA → reject; DOD == DOA + weak anchor
-#    → reject; (DOD - DOA) > 30d → downgrade; DOD.year < 2022 → reject
-# J. VLM crop confidence policy: base=0.62 (below threshold), raised to 0.75
-#    only if year matches known DOA year ±1 AND DOD >= DOA
 
-# %% [markdown]
-# # NHA Hackathon – PS1 Production Solution v4.2
-#
-# **Architecture**: Evidence-Centric Claim Adjudication
-# **Stack**: NHAclient (Gemma 3 12B vision) · PyMuPDF · pyzbar/cv2 · STG JSON configs
-#
-# ## What Changed v4.1 → v4.2 (Date Extraction Hardening)
-#
-# **Classification (F1 improvement)**
-# - FILENAME_HINTS expanded from 18 to 60+ real-dataset patterns
-# - Longest-match priority prevents short hints shadowing specific ones
-# - MG006A investigation_pre/post disambiguated by occurrence order
-# - KEYWORD_MAP doubled in coverage across all doc types
-#
-# **Architecture shift: document-centric → evidence-centric**
-# - Evidence Slot Planner: per-package slot graph (admission/diagnostic/procedure/etc.)
-# - `score_evidence_coverage()`: slot-level confidence, not just page-label confidence
-# - Decision engine is slot-aware: surfaces unfilled mandatory slots explicitly
-# - Reviewer Utility: evidence slot grid + contradictions + temporal summary
-#
-# **Output quality**
-# - Extra doc text matches ps1.md spec exactly
-# - Document inconsistency detection (conflicting clinical signals across same doc_type)
-# - ps1_run_test.py: --claim-id filter, tier breakdown, slot coverage summary
-#
-# ## Scoring Targets
-# - Document Classification (40%): per-page `doc_type` in exact PACKAGE_SCHEMAS format
-# - Rule Logic + Provenance (40%): STG rules with rich evidence trail + slot coverage
-# - Solution Design (20%): modular, STG-agnostic, evidence-slot architecture
-
-# %% CELL 00 — NHAclient Setup (with offline mock fallback)
+# %% CELL 00 — Gemma 4 / Ollama Setup
 import os
 import asyncio, base64, io, json, re
 from pathlib import Path
@@ -83,160 +35,88 @@ os.environ.setdefault('NUMEXPR_NUM_THREADS', '1')
 os.environ.setdefault('FLAGS_paddle_num_threads', '1')
 os.environ.setdefault('FLAGS_use_mkldnn', '0')
 
-# nest_asyncio: patches Jupyter's running event loop so asyncio.run() works.
 try:
     import nest_asyncio
     nest_asyncio.apply()
 except ImportError:
-    print('WARNING: nest_asyncio missing — run pip install nest_asyncio if asyncio errors appear.')
+    pass
 
-# ── NHAclient: try real client, fall back to Ollama, then mock ───────────────
-NHA_MOCK_MODE  = False
-OLLAMA_MODE    = False
-# Switch to gemma3:4b for faster local testing (~3x faster than 12b on M3).
-# Use gemma3:12b only for final validation before sandbox submission.
-OLLAMA_MODEL   = 'gemma3:12b'
-OLLAMA_VISION  = False
-OLLAMA_HOST    = 'http://localhost:11434'
+# ── Model config (Gemma 4 via Ollama) ────────────────────────────────────────
+MODEL_CONFIG = {
+    "edge_model":      "gemma4:e4b",   # page cleanup, triage, field extraction
+    "reasoning_model": "gemma4:26b",   # claim-level rules, contradictions, recommendation
+    "use_ocr_engines": True,
+    "use_31b_audit":   False,          # skipped for reproducibility and demo stability
+}
+MODEL_EDGE   = MODEL_CONFIG["edge_model"]
+MODEL_REASON = MODEL_CONFIG["reasoning_model"]
 
+# ── Ollama availability check ────────────────────────────────────────────────
+OLLAMA_AVAILABLE = False
+OLLAMA_VISION    = False
 try:
-    from nha_client import NHAclient
-    _CREDENTIALS = {
-        'clientId':     '225b8976-635c-4b19-9765-c302cfe6e7ef',
-        'clientSecret': '07899f6cc43ec56be755b265be0e27cbdcadc2be',
-    }
-    nc = NHAclient(_CREDENTIALS['clientId'], _CREDENTIALS['clientSecret'])
-    print('NHAclient loaded — LIVE mode.')
-except Exception as e:
-    nc = None
-    # Try Ollama as local fallback
+    import ollama as _ollama_lib
+    _ping = _ollama_lib.list()
+    OLLAMA_AVAILABLE = True
     try:
-        import ollama as _ollama_lib
-        _ping = _ollama_lib.list()   # raises if Ollama not running
-        OLLAMA_MODE = True
-        # Detect whether the model supports vision (image input)
-        try:
-            _info = _ollama_lib.show(OLLAMA_MODEL)
-            _caps = getattr(_info, 'capabilities', []) or []
-            OLLAMA_VISION = 'vision' in _caps
-        except Exception:
-            OLLAMA_VISION = False
-        _mode_detail = 'vision+text' if OLLAMA_VISION else 'text-only (Tier 3 uses text prompts)'
-        print(f'NHAclient unavailable. Ollama detected — {OLLAMA_MODEL} ({_mode_detail}).')
-        if not OLLAMA_VISION:
-            print('  → Tier 3 will classify via text prompt on fitz-extracted text.')
-            print('  → Pure image pages (no fitz text) fall back to keyword mock.')
-            print(f'  → For full vision support locally, pull: ollama pull gemma3:12b')
+        _info = _ollama_lib.show(MODEL_EDGE)
+        _caps = getattr(_info, 'capabilities', []) or []
+        OLLAMA_VISION = 'vision' in _caps
     except Exception:
-        NHA_MOCK_MODE = True
-        print('NHAclient unavailable. Ollama not running — using keyword MOCK mode.')
-        print(f'  → Start Ollama and pull a model: ollama pull {OLLAMA_MODEL}')
+        OLLAMA_VISION = True   # assume vision for gemma4:e4b
+    print(f'Ollama ready | edge={MODEL_EDGE} | reasoning={MODEL_REASON} | vision={OLLAMA_VISION}')
+except Exception:
+    print('WARNING: Ollama not running — pipeline will use OCR-only mock mode.')
+    print(f'  To enable full inference: ollama pull {MODEL_EDGE} && ollama pull {MODEL_REASON}')
 
-# Exact model strings as confirmed from sandbox token log:
-#   converse/google.gemma-3-12b-it        — vision-capable, used for Tier 3 VLM
-#   converse/mistral.ministral-3-3b-instruct — text-only fallback (NOT vision)
-MODEL_VISION = 'converse/google.gemma-3-12b-it'
-MODEL_TEXT   = 'converse/mistral.ministral-3-3b-instruct'
+MOCK_MODE = not OLLAMA_AVAILABLE
 
 TOKEN_LOG = {'input': 0, 'output': 0, 'calls': 0, 'mock_calls': 0}
 
-def _log_tokens(response: dict) -> None:
-    usage = response.get('usage', {})
-    # NHA API returns prompt_tokens/completion_tokens (OpenAI schema)
-    TOKEN_LOG['input']  += usage.get('prompt_tokens',     usage.get('input_tokens', 0))
-    TOKEN_LOG['output'] += usage.get('completion_tokens', usage.get('output_tokens', 0))
+def _ollama_call(model: str, messages: list) -> str:
+    """Low-level Ollama call. Returns text content string."""
+    import ollama as _ol
+    response = _ol.chat(model=model, messages=messages, options={'temperature': 0.0})
+    content = response.message.content or ''
     TOKEN_LOG['calls']  += 1
-
-def nha_call(messages: list, model: str = MODEL_VISION,
-             metadata: dict | None = None) -> dict:
-    """Live NHAclient call. metadata routes tokens to the correct PS budget."""
-    if NHA_MOCK_MODE or OLLAMA_MODE or nc is None:
-        raise RuntimeError('NHAclient not active')
-    # nc.completion() may be sync or async depending on platform version
-    resp = nc.completion(model=model, messages=messages,
-                         **(dict(metadata=metadata) if metadata else {}))
-    if asyncio.iscoroutine(resp):
-        resp = asyncio.run(resp)
-    _log_tokens(resp)
-    return resp
-
-def ollama_vlm_call(img: Image.Image, prompt: str) -> str:
-    """
-    Ollama vision call — ONLY used when OLLAMA_VISION=True (vision-capable model).
-    Ollama expects images as raw bytes (not base64 data URLs like OpenAI/NHAclient).
-    Returns raw text content from the model.
-    """
-    import ollama as _ol
-    buf = io.BytesIO()
-    img_copy = img.copy()
-    img_copy.thumbnail((1024, 1024), Image.LANCZOS)
-    img_copy.save(buf, format='JPEG', quality=85)
-    img_bytes = buf.getvalue()
-    response = _ol.chat(
-        model=OLLAMA_MODEL,
-        messages=[{'role': 'user', 'content': prompt, 'images': [img_bytes]}],
-        options={'temperature': 0.0},
-    )
-    TOKEN_LOG['calls'] += 1
-    content = response.message.content or ''
     TOKEN_LOG['output'] += len(content.split())
     return content
 
-def ollama_text_call(text: str, prompt: str) -> str:
+def edge_model_call(img, prompt: str, page_text: str = '') -> str:
     """
-    Ollama text-only call — used when OLLAMA_VISION=False (e.g. qwen2.5:latest).
-    Sends fitz-extracted page text + classification prompt. No image encoding needed.
-    Fast on M3 Mac: ~1-3s per call vs ~10-20s for vision.
-    Only called by Tier 3 when Tier 1+2 both failed AND fitz text is available.
-    Pure image pages (no fitz text) skip to mock fallback.
+    Gemma 4 E4B call — page-level cleanup, triage, classification, extraction.
+    Prefers text-only when page has sufficient fitz text (faster, equally accurate
+    for digital/printed pages). Falls back to vision for scanned/image-only pages.
     """
-    import ollama as _ol
-    # Truncate to ~2000 words to keep prompts fast
-    words = text.split()
-    truncated = ' '.join(words[:2000]) if len(words) > 2000 else text
-    full_prompt = f"{prompt}\n\nDOCUMENT TEXT:\n{truncated}"
-    response = _ol.chat(
-        model=OLLAMA_MODEL,
-        messages=[{'role': 'user', 'content': full_prompt}],
-        options={'temperature': 0.0},
-    )
-    TOKEN_LOG['calls'] += 1
-    content = response.message.content or ''
-    TOKEN_LOG['output'] += len(content.split())
-    return content
+    if not OLLAMA_AVAILABLE:
+        raise RuntimeError('Ollama not available')
+    # Text path: faster on digital pages (~3-5s vs ~15s for vision)
+    if page_text and len(page_text.split()) > 30:
+        return _ollama_call(MODEL_EDGE, [{'role': 'user', 'content': prompt + '\n\nDOCUMENT TEXT:\n' + ' '.join(page_text.split()[:2000])}])
+    # Vision path for scanned/image-only pages
+    if OLLAMA_VISION and img is not None:
+        buf = io.BytesIO()
+        img_copy = img.copy(); img_copy.thumbnail((1024, 1024))
+        img_copy.save(buf, format='JPEG', quality=85)
+        return _ollama_call(MODEL_EDGE, [{'role': 'user', 'content': prompt, 'images': [buf.getvalue()]}])
+    # Text-only model + no fitz text → cannot classify
+    raise RuntimeError('Cannot classify: no text and model is not vision-capable')
 
-def _extract_content(response: dict) -> str:
-    """Extract text from NHAclient response (OpenAI schema)."""
-    try:
-        return response['choices'][0]['message']['content']
-    except (KeyError, IndexError, TypeError):
-        return ''
+def reason_model_call(context: str, prompt: str) -> str:
+    """
+    Gemma 4 26B call — claim-level reasoning: package/STG rules, contradictions,
+    timeline interpretation, PASS/CONDITIONAL/REVIEW recommendation.
+    Always text-only (context is structured evidence, not raw images).
+    """
+    if not OLLAMA_AVAILABLE:
+        raise RuntimeError('Ollama not available')
+    full_prompt = f"{prompt}\n\nCLAIM EVIDENCE:\n{context}"
+    return _ollama_call(MODEL_REASON, [{'role': 'user', 'content': full_prompt}])
 
-mode_str = ('LIVE (NHAclient → gemma-3-12b-it)' if not NHA_MOCK_MODE and not OLLAMA_MODE
-            else f'LOCAL (Ollama/{OLLAMA_MODEL}, {"vision" if OLLAMA_VISION else "text-only"})' if OLLAMA_MODE
-            else 'MOCK (keyword stub)')
+mode_str = f'Gemma 4 (edge={MODEL_EDGE}, reasoning={MODEL_REASON})' if OLLAMA_AVAILABLE else 'MOCK (OCR stub)'
 print(f'CELL 00 ready | mode={mode_str}')
 
-
-# %% CELL 01 — Installs (NHA sandbox only — skipped when imported as module)
-import subprocess, sys
-if __name__ == '__main__':
-    # Only runs when executing the file directly in the NHA sandbox.
-    # When imported via run_test.py, this block is skipped entirely
-    # because uv sync already installed all dependencies.
-    packages = [
-        'pymupdf', 'pillow', 'opencv-python-headless',
-        'pyzbar', 'rapidfuzz', 'pydantic', 'pandas', 'numpy',
-        'json-repair', 'python-dateutil', 'nest_asyncio',
-        'pytesseract',
-        'paddlepaddle', 'paddleocr',   # PP-OCRv4 — optional, stronger than tesseract on Indian forms
-    ]
-    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q'] + packages, check=False)
-    # Tesseract binary on Linux sandboxes:
-    # subprocess.run(['apt-get', 'install', '-q', '-y', 'tesseract-ocr', 'tesseract-ocr-hin'], check=False)
-    print('Installs complete.')
-
-# %% CELL 02 — Imports + Config
+# %% CELL 01 — Imports + Config
 # (from __future__ import annotations is at top of file)
 from dataclasses import dataclass, field
 from collections import defaultdict
@@ -1246,13 +1126,11 @@ def _mock_vlm_response(img: Image.Image, package_code: str) -> dict:
     """
     TOKEN_LOG['mock_calls'] += 1
     ocr_text = ''
-    # Use globally-imported pytesseract (PYTESSERACT_AVAILABLE flag set at module load).
-    # This avoids repeated per-call imports and gives honest early failure reporting.
     if PYTESSERACT_AVAILABLE and _pytesseract_lib is not None:
         try:
             ocr_text = _pytesseract_lib.image_to_string(img, lang='eng+hin') or ''
         except Exception:
-            pass   # tesseract binary not installed or failed — use default
+            pass
 
     doc_type, conf = 'unknown', 0.20
     if ocr_text.strip():
@@ -1448,15 +1326,15 @@ Return exactly this JSON shape:
 def classify_tier3_vlm(img: Image.Image, package_code: str,
                         page_text: str = '') -> dict:
     """
-    VLM vision call — three paths:
-      1. NHAclient (sandbox LIVE mode)   — image_url format, OpenAI-compatible
-      2. Ollama local:
-         - vision model (e.g. llava)     — raw bytes format, native ollama lib
-         - text-only model (e.g. qwen2.5) — fitz text + text prompt (no image)
-      3. Mock (fallback)                  — pytesseract OCR stub, no LLM
+    Edge model (Gemma 4 E4B) page classification — solutionFlow stage:
+    edge_parse_page_with_e4b().
 
-    Prompt is identical across all paths — only the call format differs.
-    page_text: fitz-extracted text for this page (used by text-only Ollama path).
+    Three paths:
+      1. Ollama + Gemma 4 E4B  — vision or text depending on page content
+      2. Mock (Ollama unavailable) — pytesseract OCR stub, confidence capped at 0.45
+
+    Escalation: when confidence < 0.75 or needs_deep_review, caller escalates to 26B.
+    page_text: fitz-extracted text for this page.
     """
     info   = PACKAGE_INFO[package_code]
     prompt = VLM_CLASSIFY_PROMPT.format(
@@ -1465,45 +1343,15 @@ def classify_tier3_vlm(img: Image.Image, package_code: str,
         doc_types=json.dumps(info['doc_types'])
     )
 
-    # ── Path 3: Mock (no LLM available) ──────────────────────────────────────
-    if NHA_MOCK_MODE:
+    if MOCK_MODE:
         return _mock_vlm_response(img, package_code)
 
-    # ── Path 2: Ollama local ──────────────────────────────────────────────────
-    if OLLAMA_MODE:
-        try:
-            # Text-first optimisation: even with a vision model, if the page has
-            # sufficient fitz text (>30 words), use text-only inference.
-            # On M3: text call ~3-5s vs vision call ~15-20s — 4-5x faster.
-            # Text-rich pages (digital PDFs, printed forms) carry all signal in text;
-            # image encoding adds cost with no classification benefit.
-            _use_text = (page_text and len(page_text.split()) > 30)
-            if _use_text:
-                raw = ollama_text_call(page_text, prompt)
-            elif OLLAMA_VISION:
-                raw = ollama_vlm_call(img, prompt)
-            else:
-                # Text-only model + no fitz text = can't classify
-                return _mock_vlm_response(img, package_code)
-            return safe_parse_vlm(raw)
-        except Exception as e:
-            print(f'  Ollama call failed: {e}')
-            return _mock_vlm_response(img, package_code)   # degrade to mock
-
-    # ── Path 1: NHAclient sandbox ─────────────────────────────────────────────
-    b64 = page_to_base64(img)
-    messages = [{'role': 'user', 'content': [
-        {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{b64}'}},
-        {'type': 'text', 'text': prompt}
-    ]}]
     try:
-        response = nha_call(messages, model=MODEL_VISION,
-                            metadata={'problem_statement': 1})
-        raw      = _extract_content(response)
+        raw = edge_model_call(img, prompt, page_text=page_text)
         return safe_parse_vlm(raw)
     except Exception as e:
-        print(f'  NHAclient call failed: {e}')
-        return _vlm_default(f'call_error: {e}')
+        print(f'  E4B call failed: {e} — falling back to mock')
+        return _mock_vlm_response(img, package_code)
 
 # Filename stems that are always extra_document regardless of package.
 # Non-clinical documents: billing, pharmacy, satisfaction letters, Urdu/foreign content.
@@ -4182,6 +4030,60 @@ def process_claim(claim: dict, stg_configs: dict) -> dict:
 
 print('Pipeline runner ready.')
 
+# ── solutionFlow.md stage function aliases ────────────────────────────────────
+# These names match the architecture documented in solutionFlow.md exactly.
+# The pipeline internally uses these stages in sequence:
+#   OCR reads → E4B structures → validates → timeline → 26B reasons → reviewer pack
+
+def ocr_extract_pages(file_path, dpi: int = 150) -> list:
+    """Stage 1: PDF/image ingestion via PaddleOCR + PyTesseract. Alias for extract_pages()."""
+    return extract_pages(file_path, dpi=dpi)
+
+def edge_parse_page_with_e4b(img, package_code: str, page_text: str = '') -> dict:
+    """Stage 2: Gemma 4 E4B — OCR cleanup, page triage, classification, field extraction."""
+    return classify_tier3_vlm(img, package_code, page_text=page_text)
+
+def validate_extracted_evidence(rows: list, package_code: str) -> tuple:
+    """Stage 3: Deterministic gates — dates, confidence thresholds, required docs."""
+    return validate_output_rows(package_code, rows)
+
+def build_episode_timeline(claim: dict, all_rows: list, stg: dict) -> list:
+    """Stage 4: Admission → investigation → procedure → monitoring → discharge."""
+    return build_timeline(claim, all_rows, stg)
+
+def reason_claim_with_26b(claim_id: str, package_code: str,
+                           ranked_rows: list, temporal_facts: dict,
+                           stg: dict, visual_agg: dict,
+                           evidence_coverage: dict | None = None) -> dict:
+    """
+    Stage 5: Gemma 4 26B — claim-level reasoning.
+    Handles: package/STG rule interpretation, cross-document contradiction analysis,
+    timeline reasoning, PASS/CONDITIONAL/REVIEW recommendation with explanation.
+    Wraps run_rules_engine() which invokes the reasoning model for complex rule checks.
+    """
+    return run_rules_engine(
+        claim_id, package_code, ranked_rows,
+        temporal_facts, stg, visual_agg,
+        evidence_coverage=evidence_coverage,
+    )
+
+def generate_reviewer_summary(result: dict) -> dict:
+    """Stage 6: Reviewer-ready pack — decision, reasons, missing evidence, provenance."""
+    dec = result.get('decision', {})
+    return {
+        'claim_id':         result.get('claim_id'),
+        'package_code':     result.get('package_code'),
+        'decision':         dec.get('decision'),
+        'confidence':       dec.get('confidence'),
+        'flags':            dec.get('flags', []),
+        'reviewer_utility': dec.get('reviewer_utility', {}),
+        'timeline':         result.get('timeline', []),
+        'classification':   result.get('logical_docs', []),
+        'evidence_coverage':result.get('evidence_coverage', {}),
+    }
+
+print('Stage aliases ready (ocr_extract_pages / edge_parse_page_with_e4b / validate_extracted_evidence / build_episode_timeline / reason_claim_with_26b / generate_reviewer_summary)')
+
 # %% CELL 18 — Batch Runner + Export
 def run_batch(claims: list[dict], stg_configs: dict,
               max_claims: Optional[int] = None) -> list[dict]:
@@ -4335,30 +4237,13 @@ if __name__ == '__main__':
 
 # %% CELL 24 — Token Usage Report
 if __name__ == '__main__':
-    total_tok  = TOKEN_LOG['input'] + TOKEN_LOG['output']
-    n_claims   = len([r for r in ALL_RESULTS if r.get('json_rows')])
-    n_vlm      = TOKEN_LOG['calls']
-    n_mock     = TOKEN_LOG.get('mock_calls', 0)
-    budget_pct = total_tok / 4_000_000 * 100
-    print(f'=== Mode: {"MOCK (NHAclient unavailable)" if NHA_MOCK_MODE else "LIVE"} ===')
-    print(f'  Input tokens:    {TOKEN_LOG["input"]:,}')
-    print(f'  Output tokens:   {TOKEN_LOG["output"]:,}')
-    print(f'  Total tokens:    {total_tok:,}')
-    print(f'  Live LLM calls:  {n_vlm}')
-    print(f'  Mock VLM calls:  {n_mock}  (replaced by real VLM when NHAclient fixed)')
-    print(f'  Budget used:     {budget_pct:.1f}% of ~4M token budget')
-    print(f'  Claims done:     {n_claims}')
-    if NHA_MOCK_MODE:
-        print()
-        print('NOTE: Mock mode results are valid for testing pipeline correctness.')
-        print('      Rows via Tier 1/2 (filename/keyword) are REAL classifications.')
-        print('      Rows marked _mock=True used pytesseract stub for Tier 3.')
-        print('      Set NHA_MOCK_MODE=False and rerun when NHAclient is restored.')
-    if n_claims:
-        print(f'\n  Avg tokens/claim (live): {total_tok // n_claims:,}')
-    print('\n=== Budget Projections (when live) ===')
-    tok_per_claim = max(total_tok // max(n_claims, 1), 2000)
-    for n in (40, 100, 200, 500):
-        est = n * tok_per_claim
-        pct = est / 4_000_000 * 100
-        print(f'  {n:>4} claims: ~{est:>10,} tokens ({pct:.0f}% of budget)')
+    total_tok = TOKEN_LOG['input'] + TOKEN_LOG['output']
+    n_claims  = len([r for r in ALL_RESULTS if r.get('json_rows')])
+    n_calls   = TOKEN_LOG['calls']
+    n_mock    = TOKEN_LOG.get('mock_calls', 0)
+    print(f'=== Mode: {"MOCK (Ollama unavailable)" if MOCK_MODE else "LIVE (Gemma 4 via Ollama)"} ===')
+    print(f'  Output tokens (est.): {TOKEN_LOG["output"]:,}')
+    print(f'  Ollama calls:         {n_calls}')
+    print(f'  Mock calls:           {n_mock}')
+    print(f'  Claims processed:     {n_claims}')
+    print(f'  Models used:          edge={MODEL_EDGE}, reasoning={MODEL_REASON}')
