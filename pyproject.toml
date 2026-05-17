@@ -5,7 +5,7 @@ description = "Explainable claim-review assistant for public health insurance â€
 requires-python = ">=3.10"
 dependencies = [
     # Web layer
-    "fastapi>=0.111.0",
+    "fastapi[standard]>=0.111.0",
     "uvicorn[standard]>=0.29.0",
     "python-multipart>=0.0.9",
     # Document reading (OCR)

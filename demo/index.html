@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaimSetu — Claim Review Demo</title>
+<style>
+/* ── Reset + Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue-dark:  #0f2d6b;
+  --blue:       #1e3a8a;
+  --blue-mid:   #2563eb;
+  --blue-light: #dbeafe;
+  --gold:       #f59e0b;
+  --gold-light: #fef3c7;
+  --green:      #065f46;
+  --green-bg:   #d1fae5;
+  --amber:      #92400e;
+  --amber-bg:   #fef3c7;
+  --red:        #991b1b;
+  --red-bg:     #fee2e2;
+  --slate:      #475569;
+  --border:     #e2e8f0;
+  --bg:         #f0f4f8;
+  --white:      #ffffff;
+  --text:       #1e293b;
+  --text-muted: #64748b;
+  --radius:     10px;
+  --shadow:     0 1px 6px rgba(0,0,0,0.08);
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; line-height: 1.5;
+}
+
+/* ── Header ── */
+header {
+  background: var(--blue);
+  padding: 0 2.5rem;
+  height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.logo { display: flex; align-items: center; gap: 0.75rem; }
+.logo-icon {
+  width: 36px; height: 36px; background: var(--gold);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 1rem; color: var(--blue-dark);
+}
+.logo-text h1 { font-size: 1.2rem; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+.logo-text p  { font-size: 0.72rem; color: rgba(255,255,255,0.65); margin-top: 1px; }
+.header-badges { display: flex; gap: 0.5rem; align-items: center; }
+.badge {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
+  padding: 0.25rem 0.6rem; border-radius: 4px;
+}
+.badge-gold  { background: var(--gold); color: var(--blue-dark); }
+.badge-white { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25); }
+
+/* ── Status bar ── */
+#statusBar {
+  background: #1e293b; color: rgba(255,255,255,0.7);
+  font-size: 0.73rem; padding: 0.35rem 2.5rem;
+  display: flex; gap: 1.5rem; align-items: center;
+}
+#statusBar span { display: flex; align-items: center; gap: 0.35rem; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; }
+.dot.green { background: #34d399; }
+.dot.amber { background: var(--gold); }
+
+/* ── Layout ── */
+.layout {
+  display: grid; grid-template-columns: 360px 1fr;
+  gap: 1.5rem; padding: 1.5rem 2.5rem; max-width: 1200px; margin: 0 auto;
+  min-height: calc(100vh - 100px);
+}
+
+/* ── Panel / Card ── */
+.panel {
+  background: var(--white); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.panel-header {
+  background: var(--blue-light); padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid #bfdbfe;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.panel-header h2 { font-size: 0.85rem; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.05em; }
+.panel-body { padding: 1.25rem; }
+
+/* ── Form elements ── */
+label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--slate); margin-bottom: 0.35rem; }
+select {
+  width: 100%; padding: 0.55rem 0.75rem;
+  border: 1.5px solid var(--border); border-radius: 7px;
+  font-size: 0.85rem; color: var(--text); background: var(--white);
+  appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.75rem center;
+}
+select:focus { outline: none; border-color: var(--blue-mid); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+
+.field-group { margin-bottom: 1.1rem; }
+
+/* ── Drop zone ── */
+.drop-zone {
+  border: 2px dashed #93c5fd; border-radius: 8px;
+  padding: 1.75rem 1rem; text-align: center; cursor: pointer;
+  transition: all 0.2s; background: #f8faff;
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.over { background: var(--blue-light); border-color: var(--blue-mid); }
+.drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop-icon { font-size: 2rem; margin-bottom: 0.4rem; }
+.drop-label { font-size: 0.82rem; font-weight: 600; color: var(--blue); }
+.drop-sub   { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; }
+.file-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+.chip {
+  background: var(--blue-light); color: var(--blue);
+  font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.55rem;
+  border-radius: 20px; max-width: 160px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Submit button ── */
+.btn {
+  width: 100%; padding: 0.7rem 1rem;
+  background: var(--blue); color: #fff;
+  border: none; border-radius: 7px;
+  font-size: 0.9rem; font-weight: 700; cursor: pointer;
+  transition: background 0.2s; display: flex; align-items: center;
+  justify-content: center; gap: 0.5rem;
+}
+.btn:hover:not(:disabled) { background: var(--blue-mid); }
+.btn:disabled { background: #94a3b8; cursor: not-allowed; }
+.btn-spinner {
+  width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.8s linear infinite; display: none;
+}
+.btn.loading .btn-spinner { display: block; }
+.btn.loading .btn-label::after { content: '…'; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.err-msg { font-size: 0.78rem; color: var(--red); margin-top: 0.6rem; min-height: 1.2em; }
+
+/* ── Architecture pill ── */
+.arch-pill {
+  background: #f1f5f9; border-radius: 8px; padding: 0.7rem 0.9rem;
+  margin-top: 1rem; font-size: 0.72rem; color: var(--slate);
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+}
+.arch-pill .step {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 5px; padding: 0.2rem 0.5rem;
+  font-weight: 600; color: var(--blue); font-size: 0.7rem;
+}
+.arch-pill .arrow { color: #94a3b8; }
+
+/* ── Results panel ── */
+#resultsPanel { display: none; }
+.results-inner { padding: 1.25rem; }
+
+/* ── Decision hero ── */
+.decision-hero {
+  border-radius: 8px; padding: 1.1rem 1.25rem;
+  display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;
+}
+.decision-hero.PASS         { background: var(--green-bg); }
+.decision-hero.CONDITIONAL  { background: var(--amber-bg); }
+.decision-hero.REVIEW       { background: var(--red-bg); }
+.decision-pill {
+  font-size: 1.3rem; font-weight: 800; letter-spacing: 0.03em;
+  padding: 0.3rem 1rem; border-radius: 6px;
+}
+.PASS .decision-pill        { background: #a7f3d0; color: var(--green); }
+.CONDITIONAL .decision-pill { background: #fde68a; color: var(--amber); }
+.REVIEW .decision-pill      { background: #fca5a5; color: var(--red); }
+.decision-meta h3 { font-size: 0.95rem; font-weight: 700; }
+.decision-meta p  { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+/* ── Section headers ── */
+.section-title {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--slate);
+  margin-bottom: 0.6rem; padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Tables ── */
+.tbl-wrap { overflow-x: auto; margin-bottom: 1.25rem; border-radius: 7px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+th {
+  background: #f8faff; padding: 0.55rem 0.75rem;
+  text-align: left; font-weight: 600; color: var(--slate);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #f1f5f9; color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #fafbff; }
+.tag {
+  display: inline-block; font-size: 0.68rem; font-weight: 700;
+  padding: 0.15rem 0.45rem; border-radius: 4px;
+}
+.tag-green { background: var(--green-bg); color: var(--green); }
+.tag-amber { background: var(--amber-bg); color: var(--amber); }
+.tag-red   { background: var(--red-bg);   color: var(--red); }
+.tag-blue  { background: var(--blue-light); color: var(--blue); }
+.tag-gray  { background: #f1f5f9; color: var(--slate); }
+
+/* ── Flags ── */
+.flag-list { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.25rem; }
+.flag-item {
+  display: flex; gap: 0.5rem; align-items: flex-start;
+  border-radius: 6px; padding: 0.55rem 0.75rem;
+  font-size: 0.78rem; border-left: 3px solid;
+}
+.flag-item.mandatory { background: var(--red-bg);   border-color: #ef4444; }
+.flag-item.advisory  { background: var(--amber-bg); border-color: var(--gold); }
+.flag-item.info      { background: var(--blue-light);border-color: var(--blue-mid); }
+.flag-sev { font-weight: 700; white-space: nowrap; font-size: 0.7rem; margin-top: 0.1rem; }
+
+/* ── Mode note ── */
+.mode-note {
+  font-size: 0.72rem; color: var(--text-muted); background: #f8faff;
+  border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 3rem 1.5rem; color: var(--text-muted);
+  text-align: center; min-height: 300px;
+}
+.empty-state .big-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+.empty-state h3 { font-size: 0.95rem; font-weight: 600; color: var(--slate); }
+.empty-state p  { font-size: 0.8rem; margin-top: 0.4rem; max-width: 280px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">CS</div>
+    <div class="logo-text">
+      <h1>ClaimSetu</h1>
+      <p>Explainable Claim Review for Public Health Insurance</p>
+    </div>
+  </div>
+  <div class="header-badges">
+    <span class="badge badge-white">Gemma 4 Good Hackathon</span>
+    <span class="badge badge-gold">🏆 Kaggle</span>
+  </div>
+</header>
+
+<div id="statusBar">
+  <span><span class="dot" id="apiDot"></span><span id="apiStatus">Connecting…</span></span>
+  <span><span class="dot" id="edgeDot"></span><span id="edgeStatus">Edge model: —</span></span>
+  <span><span class="dot" id="reasonDot"></span><span id="reasonStatus">Reasoning model: —</span></span>
+  <span><span class="dot" id="ocrDot"></span><span id="ocrStatus">OCR: —</span></span>
+</div>
+
+<div class="layout">
+
+  <!-- Left: Upload panel -->
+  <aside>
+    <div class="panel">
+      <div class="panel-header">
+        <span>📋</span><h2>Claim Input</h2>
+      </div>
+      <div class="panel-body">
+
+        <div class="field-group">
+          <label for="pkg">Package / Scheme</label>
+          <select id="pkg">
+            <option value="MG064A">MG064A — Severe Anemia</option>
+            <option value="SG039C">SG039C — Cholecystectomy</option>
+            <option value="MG006A">MG006A — Enteric Fever</option>
+            <option value="SB039A">SB039A — Total Knee Replacement</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label>Claim Documents</label>
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" multiple
+                   accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp">
+            <div class="drop-icon">📂</div>
+            <div class="drop-label">Drop files here or click to browse</div>
+            <div class="drop-sub">PDF · JPG · PNG · TIFF supported</div>
+            <div class="file-chips" id="fileChips"></div>
+          </div>
+        </div>
+
+        <button class="btn" id="submitBtn" onclick="submitClaim()">
+          <div class="btn-spinner" id="spinner"></div>
+          <span class="btn-label">Analyse Claim</span>
+        </button>
+        <div class="err-msg" id="errMsg"></div>
+
+        <div class="arch-pill">
+          <span class="step">OCR</span><span class="arrow">→</span>
+          <span class="step">E4B</span><span class="arrow">→</span>
+          <span class="step">Validators</span><span class="arrow">→</span>
+          <span class="step">26B</span><span class="arrow">→</span>
+          <span class="step">Reviewer</span>
+        </div>
+
+      </div>
+    </div>
+  </aside>
+
+  <!-- Right: Results panel -->
+  <main>
+    <div class="panel" id="resultsPanel">
+      <div class="panel-header">
+        <span>🔍</span><h2>Review Findings</h2>
+      </div>
+      <div class="results-inner" id="resultsBody"></div>
+    </div>
+
+    <!-- Empty state shown before first submission -->
+    <div class="panel" id="emptyPanel">
+      <div class="empty-state">
+        <div class="big-icon">🏥</div>
+        <h3>No claim analysed yet</h3>
+        <p>Select a package code, upload the claim documents, and click <strong>Analyse Claim</strong> to see the review findings here.</p>
+      </div>
+    </div>
+  </main>
+
+</div><!-- .layout -->
+
+<script>
+const API = 'http://localhost:8000';
+
+// ── Status bar ────────────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(API + '/health');
+    const d = await r.json();
+    const live = d.mode === 'live';
+    setDot('apiDot', 'green'); setStatus('apiStatus', 'API: connected');
+    setDot('edgeDot', live ? 'green' : 'amber');
+    setStatus('edgeStatus', 'Edge: ' + (d.edge_model || '—'));
+    setDot('reasonDot', live ? 'green' : 'amber');
+    setStatus('reasonStatus', 'Reasoning: ' + (d.reasoning_model || '—'));
+    const ocrOk = d.ocr?.paddle || d.ocr?.tesseract;
+    setDot('ocrDot', ocrOk ? 'green' : 'amber');
+    setStatus('ocrStatus', 'OCR: ' + (d.ocr?.paddle ? 'PaddleOCR' : d.ocr?.tesseract ? 'Tesseract' : 'unavailable'));
+  } catch {
+    setDot('apiDot', ''); setStatus('apiStatus', 'API: not reachable — start uvicorn');
+  }
+}
+function setDot(id, cls) {
+  const el = document.getElementById(id);
+  el.className = 'dot ' + cls;
+}
+function setStatus(id, txt) {
+  document.getElementById(id).textContent = txt;
+}
+checkHealth();
+
+// ── File handling ─────────────────────────────────────────────────────────────
+let selectedFiles = [];
+const dz = document.getElementById('dropZone');
+const fi = document.getElementById('fileInput');
+
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  selectedFiles = [...e.dataTransfer.files]; renderChips();
+});
+fi.addEventListener('change', () => { selectedFiles = [...fi.files]; renderChips(); });
+
+function renderChips() {
+  const el = document.getElementById('fileChips');
+  el.innerHTML = selectedFiles.map(f =>
+    `<span class="chip" title="${f.name}">${f.name}</span>`).join('');
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+async function submitClaim() {
+  if (!selectedFiles.length) {
+    document.getElementById('errMsg').textContent = 'Please select at least one claim file.';
+    return;
+  }
+  const btn = document.getElementById('submitBtn');
+  const err = document.getElementById('errMsg');
+  err.textContent = '';
+  btn.classList.add('loading'); btn.disabled = true;
+
+  const fd = new FormData();
+  selectedFiles.forEach(f => fd.append('files', f));
+  fd.append('package_code', document.getElementById('pkg').value);
+
+  try {
+    const res = await fetch(API + '/process', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(e.detail || res.statusText);
+    }
+    const data = await res.json();
+    renderResults(data);
+  } catch (e) {
+    err.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.classList.remove('loading'); btn.disabled = false;
+  }
+}
+
+// ── Render results ────────────────────────────────────────────────────────────
+function renderResults(d) {
+  document.getElementById('emptyPanel').style.display = 'none';
+  document.getElementById('resultsPanel').style.display = 'block';
+
+  const dec = d.decision || 'REVIEW';
+  const conf = ((d.confidence || 0) * 100).toFixed(0);
+
+  let html = '';
+
+  // Decision hero
+  html += `<div class="decision-hero ${dec}">
+    <div class="decision-pill">${dec}</div>
+    <div class="decision-meta">
+      <h3>${decisionLabel(dec)}</h3>
+      <p>Confidence: ${conf}% &nbsp;·&nbsp; ${d.package_code}</p>
+      ${d.reviewer_note ? `<p style="margin-top:0.35rem; font-style:italic;">${d.reviewer_note}</p>` : ''}
+    </div>
+  </div>`;
+
+  // Evidence coverage
+  const cov = d.evidence_coverage || {};
+  if (Object.keys(cov).length) {
+    html += `<div class="section-title">Evidence Coverage</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Evidence Slot</th><th>Filled</th><th>Document Type</th><th>Page</th><th>Confidence</th></tr></thead>
+      <tbody>`;
+    for (const [slot, info] of Object.entries(cov)) {
+      const cls = info.filled ? 'tag-green' : 'tag-red';
+      const tick = info.filled ? '✓' : '✗';
+      html += `<tr>
+        <td>${slot.replace(/_/g,' ')}</td>
+        <td><span class="tag ${cls}">${tick}</span></td>
+        <td>${info.doc_type || '—'}</td>
+        <td>${info.page != null ? 'p.' + info.page : '—'}</td>
+        <td>${info.filled ? info.confidence.toFixed(2) : '—'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // Timeline
+  const tl = d.timeline || [];
+  if (tl.length) {
+    html += `<div class="section-title">Episode Timeline</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th>Event</th><th>Date</th><th>Source</th><th>Status</th></tr></thead>
+      <tbody>`;
+    tl.forEach((row, i) => {
+      const evt    = row.event_type || row.Event || '—';
+      const date   = row.date || row.Date || '—';
+      const src    = row.source_doc || row['Source Document'] || '—';
+      const status = row.validity || row.Status || '—';
+      const stCls  = status === 'Valid' ? 'tag-green' : status === 'Invalid' ? 'tag-red' : 'tag-amber';
+      html += `<tr>
+        <td>${i+1}</td><td>${evt}</td><td>${date}</td>
+        <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${src}">${src}</td>
+        <td><span class="tag ${stCls}">${status}</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Document classification
+  const cls = d.classification || [];
+  if (cls.length) {
+    html += `<div class="section-title">Document Classification</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Document Type</th><th>File</th><th>Pages</th></tr></thead>
+      <tbody>`;
+    cls.forEach(ld => {
+      html += `<tr>
+        <td><span class="tag tag-blue">${ld.doc_type}</span></td>
+        <td style="font-size:0.72rem; color:var(--text-muted);">${ld.file}</td>
+        <td>${ld.pages}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Flags
+  const flags = (d.flags || []).slice(0,10);
+  if (flags.length) {
+    html += `<div class="section-title">Review Flags</div><div class="flag-list">`;
+    flags.forEach(f => {
+      const sev = f.severity || 'info';
+      html += `<div class="flag-item ${sev}">
+        <span class="flag-sev tag tag-${sev === 'mandatory' ? 'red' : sev === 'advisory' ? 'amber' : 'blue'}">${sev}</span>
+        <span>${f.flag || ''}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Mode note
+  if (d.mode === 'mock') {
+    html += `<div class="mode-note">ℹ️ Running in OCR-only mock mode — Ollama not detected.
+      Start Ollama with <code>gemma4:e4b</code> and <code>gemma4:26b</code> for full Gemma 4 inference.</div>`;
+  }
+
+  document.getElementById('resultsBody').innerHTML = html;
+}
+
+function decisionLabel(dec) {
+  return dec === 'PASS' ? 'Claim packet sufficient — recommend approval'
+       : dec === 'CONDITIONAL' ? 'Additional evidence required before decision'
+       : 'Manual review required — contradictions or missing evidence';
+}
+</script>
+</body>
+</html>

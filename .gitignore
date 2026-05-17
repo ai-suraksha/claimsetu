@@ -220,3 +220,6 @@ __marimo__/
 # ClaimSetu — local data and outputs (never commit patient/claim documents)
 Data/
 outputs/
+
+# macOS
+.DS_Store

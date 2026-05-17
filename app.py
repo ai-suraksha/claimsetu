@@ -20,11 +20,26 @@ from typing import List
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="ClaimSetu",
     description="Explainable claim-review assistant for public health insurance",
     version="0.1.0",
+)
+
+# Serve demo UI as static files
+_demo_dir = Path(__file__).parent / "demo"
+if _demo_dir.exists():
+    app.mount("/demo", StaticFiles(directory=str(_demo_dir), html=True), name="demo")
+
+# CORS — allow demo UI (localhost or file://) to call the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 # ── Lazy import of pipeline (heavy OCR/model deps load once) ─────────────────
