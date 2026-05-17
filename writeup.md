@@ -14,11 +14,14 @@ Submission guide and paste-ready copy for [Gemma 4 Good Hackathon](https://www.k
 | **Subtitle character count** | 113 / 140 |
 | **Writeup URL slug** | `claimsetu-evidence-backed-claim-review` |
 | **Full writeup URL** | `https://www.kaggle.com/competitions/gemma-4-good-hackathon/writeups/claimsetu-evidence-backed-claim-review` |
-| **Primary track** | Health & Sciences |
-| **Secondary track** | Safety & Trust |
-| **Optional track** | Ollama / Local AI / Edge AI — the demo UI and `/health` endpoint explicitly surface the local Gemma 4 model stack; include this track |
+| **Submission tracks** | Main Track, Impact Track, Special Technology Track |
+| **Impact Track category** | Health & Sciences |
+| **Safety & Trust alignment** | Mention in description, but do not select as the primary Impact category unless Kaggle forces one prize category only and Health & Sciences is unavailable |
+| **Special Technology category** | Ollama — the demo UI and `/health` endpoint explicitly surface the local Gemma 4 model stack |
 
-**Track priority:** (1) Health & Sciences → (2) Safety & Trust → (3) Local/edge track, if applicable.
+**Final selection on the form:** Main Track · Impact Track → **Health & Sciences** · Special Technology Track → **Ollama**
+
+Do not pick Safety & Trust over Health & Sciences unless the form lets you select multiple Impact categories. ClaimSetu’s primary impact story is healthcare claim review; Safety & Trust is a supporting credibility layer in the writeup, not the primary Impact category.
 
 ---
 
@@ -145,6 +148,16 @@ This repository does **not** include real patient, hospital, or claim documents.
 
 The system was developed with privacy in mind. Any real or redacted healthcare claim documents used during private development are not redistributed. The public repository includes synthetic examples, schemas, sample outputs, and evaluation scaffolding so the pipeline can be inspected safely.
 
+#### Track alignment
+
+**Main Track:** ClaimSetu demonstrates an end-to-end, real-world AI system for public health insurance claim review, combining document intelligence, local model inference, deterministic validation, and human-in-the-loop recommendations.
+
+**Impact Track — Health & Sciences:** ClaimSetu helps bridge the gap between healthcare data and human reviewers by converting messy hospital claim packets into structured, evidence-backed findings. It can reduce manual review burden, improve consistency, and support faster access to reimbursement.
+
+**Safety & Trust alignment:** The system is designed to stay grounded in source evidence. It does not make autonomous medical or payment decisions. Weak, missing, contradictory, or low-confidence evidence is escalated to **CONDITIONAL** or **REVIEW**.
+
+**Special Technology Track — Ollama:** ClaimSetu runs Gemma 4 locally via Ollama, supporting privacy-aware and low-connectivity deployment patterns for sensitive healthcare workflows.
+
 #### Impact
 
 In high-volume public health insurance workflows, claim reviewers spend significant time verifying document completeness, dates, treatment timelines, and rule evidence. ClaimSetu can reduce manual review burden by turning unstructured claim packets into structured, evidence-backed review notes.
@@ -213,9 +226,9 @@ The public repository does not include real patient, hospital, or claim document
 - [ ] **Title:** ClaimSetu: Evidence-Backed Claim Review for Public Health Insurance  
 - [ ] **Subtitle:** A local, human-in-the-loop assistant that turns messy hospital claim packets into transparent review recommendations.  
 - [ ] **Slug:** `claimsetu-evidence-backed-claim-review`  
-- [ ] **Primary track:** Health & Sciences  
-- [ ] **Secondary track:** Safety & Trust  
-- [ ] **Optional track:** Ollama / Local AI / Edge AI  
+- [ ] **Tracks selected:** Main Track + Impact Track + Special Technology Track  
+- [ ] **Impact category:** Health & Sciences  
+- [ ] **Special Technology category:** Ollama  
 - [ ] **Repo:** `https://github.com/<your-username>/claimsetu` (replace placeholder)
 - [ ] **Video:** YouTube 3-minute demo (replace `<your-video-id>` placeholder)
 - [ ] **Demo UI:** `uv run uvicorn app:app --reload` → record at http://localhost:8000  
