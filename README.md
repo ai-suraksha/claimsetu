@@ -60,7 +60,7 @@ ollama pull gemma4:26b
 
 # Start the demo UI
 uv run uvicorn app:app --reload
-# → Open http://localhost:8000
+# → Open http://localhost:8000/demo
 ```
 
 Place claim documents under `Data/claims-datas/<PACKAGE_CODE>/<CLAIM_ID>/` (see Data section below). The `Data/` folder is git-ignored.
