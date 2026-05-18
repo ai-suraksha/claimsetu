@@ -63,7 +63,7 @@ uv run uvicorn app:app --reload
 # → Open http://localhost:8000
 ```
 
-Place claim documents under `Data/ps1-dataset/<PACKAGE_CODE>/<CLAIM_ID>/` (see Data section below). The `Data/` folder is git-ignored.
+Place claim documents under `Data/claims-datas/<PACKAGE_CODE>/<CLAIM_ID>/` (see Data section below). The `Data/` folder is git-ignored.
 
 **Run pipeline directly (no UI):**
 
@@ -140,6 +140,10 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 | [sample_outputs/](sample_outputs/) | One anonymised sample claim output (decision, classification, timeline) |
 
 ---
+
+## Prototype structure
+
+For hackathon reproducibility, the core pipeline is kept in a single file (`claimsAssistant.py`). The code is organised internally by pipeline stage and can be split into modules (ocr, classification, timeline, rules, reasoning) in a production version.
 
 ## Data
 

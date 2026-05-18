@@ -21,7 +21,7 @@ Submission guide and paste-ready copy for [Gemma 4 Good Hackathon](https://www.k
 
 **Final selection on the form:** Main Track · Impact Track → **Health & Sciences** · Special Technology Track → **Ollama**
 
-Do not pick Safety & Trust over Health & Sciences unless the form lets you select multiple Impact categories. ClaimSetu’s primary impact story is healthcare claim review; Safety & Trust is a supporting credibility layer in the writeup, not the primary Impact category.
+Safety & Trust is woven into the project description as a credibility layer but is **not** selected as the primary Impact category — Health & Sciences is the right primary impact story.
 
 ---
 
