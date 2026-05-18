@@ -129,6 +129,41 @@ async def process_claim(
         result = ca.process_claim(claim, ca.STG_CONFIGS)
         summary = ca.generate_reviewer_summary(result)
 
+        # ── Timeline: normalise DataFrame columns to snake_case ───────────────
+        timeline_rows = []
+        tdf = result.get("timeline_df")
+        if hasattr(tdf, "to_dict"):
+            for row in tdf.to_dict(orient="records"):
+                def _val(*keys):
+                    for k in keys:
+                        v = row.get(k)
+                        if v is not None and str(v).strip() not in ("", "nan"):
+                            return str(v)
+                    return "—"
+                timeline_rows.append({
+                    "event_type": _val("Event Type", "event_type"),
+                    "date":       _val("Date", "date"),
+                    "source_doc": _val("Source Document", "source_doc"),
+                    "page":       _val("Best Page", "page"),
+                    "validity":   _val("Temporal Validity", "validity"),
+                })
+
+        # ── Classification: group per logical doc (doc_type, file, page_count) ─
+        # logical_docs is list of (doc_type, file_name, page_count) tuples.
+        # Mask patient-name fragments from filenames for safe public demo.
+        def _safe_filename(name: str) -> str:
+            import re
+            # Keep only the numeric prefix and extension e.g. "000585__...SUDHAN.pdf" → "000585.pdf"
+            m = re.match(r'^(\d+)', name)
+            prefix = m.group(1) if m else "doc"
+            suffix = Path(name).suffix
+            return f"{prefix}{suffix}"
+
+        classification_rows = [
+            {"doc_type": ld[0], "file": _safe_filename(str(ld[1])), "pages": ld[2]}
+            for ld in result.get("logical_docs", [])
+        ]
+
         # Build a clean JSON-serialisable response
         response = {
             "claim_id":      result["claim_id"],
@@ -136,17 +171,14 @@ async def process_claim(
             "decision":      summary["decision"],
             "confidence":    summary["confidence"],
             "flags":         summary["flags"],
-            "timeline":      result.get("timeline_df", []),
-            "classification": [
-                {"doc_type": ld[0], "file": ld[1], "pages": ld[2]}
-                for ld in result.get("logical_docs", [])
-            ],
+            "timeline":      timeline_rows,
+            "classification": classification_rows,
             "evidence_coverage": {
                 slot: {
                     "filled":     info["filled"],
                     "confidence": round(info["confidence"], 2),
                     "doc_type":   info.get("doc_type"),
-                    "page":       info.get("best_page"),
+                    "page":       info.get("best_page") or info.get("page"),
                 }
                 for slot, info in result.get("evidence_coverage", {}).items()
             },
@@ -154,10 +186,6 @@ async def process_claim(
             "reasoning_summary": result.get("reasoning_summary", {}),
             "mode": "live" if ca.OLLAMA_AVAILABLE else "mock",
         }
-
-        # Serialize timeline_df (pandas DataFrame → list of dicts)
-        if hasattr(result.get("timeline_df"), "to_dict"):
-            response["timeline"] = result["timeline_df"].to_dict(orient="records")
 
         return response
 

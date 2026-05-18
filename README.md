@@ -141,9 +141,13 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 
 ---
 
+## Evaluation approach
+
+The pipeline was evaluated on a private set of 40 real-world health insurance claims across 4 packages (MG064A, SG039C, MG006A, SB039A) with manually verified ground truth for dates, evidence slots, and rule outcomes. Key metrics: DOA/DOD extraction accuracy, mandatory evidence slot fill rate, and timeline date coverage. Hallucinated dates (model outputs that contradict source documents) are tracked explicitly as rejection criteria. Private evaluation data and claim documents are not redistributed.
+
 ## Prototype structure
 
-For hackathon reproducibility, the core pipeline is kept in a single file (`claimsAssistant.py`). The code is organised internally by pipeline stage and can be split into modules (ocr, classification, timeline, rules, reasoning) in a production version.
+For hackathon reproducibility, the core pipeline is kept in a single file (`claimsAssistant.py`), organised internally by pipeline stage. A production version would split this into modules: ocr, classification, timeline, rules, reasoning.
 
 ## Data
 

@@ -230,5 +230,7 @@ outputs/
 # macOS
 .DS_Store
 
-# Local env — never commit secrets or host config
-.env
+# Local-only scripts — contain private eval data, not for public repo
+evals.py
+regenerate_sample.py
+CODE_REVIEW.md
