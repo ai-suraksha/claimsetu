@@ -140,6 +140,7 @@ async def process_claim(
                 for slot, info in result.get("evidence_coverage", {}).items()
             },
             "reviewer_note": summary.get("reviewer_utility", {}).get("decision_summary", ""),
+            "reasoning_summary": result.get("reasoning_summary", {}),
             "mode": "live" if ca.OLLAMA_AVAILABLE else "mock",
         }
 

@@ -433,6 +433,26 @@ function renderResults(d) {
     </div>
   </div>`;
 
+  // Reasoning summary (26B output)
+  const rs = d.reasoning_summary || {};
+  if (rs.reviewer_summary) {
+    html += `<div class="section-title">Gemma 4 26B — Reviewer Reasoning</div>
+    <div style="background:#f8faff; border:1px solid var(--border); border-radius:8px; padding:1rem; margin-bottom:1.25rem; font-size:0.82rem;">
+      <p style="margin-bottom:0.6rem;">${rs.reviewer_summary}</p>`;
+    if (rs.key_evidence?.length) {
+      html += `<strong style="font-size:0.72rem; color:var(--slate);">KEY EVIDENCE</strong>
+      <ul style="margin:0.3rem 0 0.6rem 1.2rem; color:var(--text);">` +
+        rs.key_evidence.map(e => `<li>${e}</li>`).join('') + '</ul>';
+    }
+    if (rs.recommended_next_action) {
+      html += `<p style="color:var(--blue); font-weight:600; font-size:0.78rem;">→ ${rs.recommended_next_action}</p>`;
+    }
+    if (rs.safety_note) {
+      html += `<p style="color:var(--text-muted); font-size:0.72rem; margin-top:0.5rem; font-style:italic;">${rs.safety_note}</p>`;
+    }
+    html += '</div>';
+  }
+
   // Evidence coverage
   const cov = d.evidence_coverage || {};
   if (Object.keys(cov).length) {
