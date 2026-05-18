@@ -136,14 +136,23 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 | [app.py](app.py) | FastAPI web app + demo UI (`/demo`) |
 | [pyproject.toml](pyproject.toml) | uv project config and dependencies |
 | [demo/index.html](demo/index.html) | Standalone demo UI for recording (served at `/demo`) |
-| [stg-knowledgeBase/](stg-knowledgeBase/) | Public Standard Treatment Guidelines (4 STG PDFs — MG064A, SG039C, MG006A, SB039A) |
+| [knowledgeBase/](knowledgeBase/) | Standard Treatment Guidelines (4 STG PDFs — MG064A, SG039C, MG006A, SB039A) |
 | [sample_outputs/](sample_outputs/) | One anonymised sample claim output (decision, classification, timeline) |
 
 ---
 
-## Evaluation approach
+## Evaluation
 
-The pipeline was evaluated on a private set of 40 real-world health insurance claims across 4 packages (MG064A, SG039C, MG006A, SB039A) with manually verified ground truth for dates, evidence slots, and rule outcomes. Key metrics: DOA/DOD extraction accuracy, mandatory evidence slot fill rate, and timeline date coverage. Hallucinated dates (model outputs that contradict source documents) are tracked explicitly as rejection criteria. Private evaluation data and claim documents are not redistributed.
+The pipeline was validated on a private set of 40 real-world health insurance claims across 4 packages (MG064A, SG039C, MG006A, SB039A) with manually verified ground truth.
+
+| Metric | Notes |
+|--------|-------|
+| Document classification | Tier 1/2 (filename + keyword) correct on the majority of pages; Tier 3 (E4B) handles ambiguous pages |
+| Mandatory slot fill rate | 4 of 5 slots filled on the sample claim; pre-treatment evidence the most common gap on scanned packets |
+| Date extraction | DOA/DOD extracted where digital text present; correctly marked unverifiable on scanned/handwritten pages |
+| Hallucinated-date rejection | Dates contradicting source documents rejected by the 4-condition acceptance gate |
+
+Private evaluation data and raw claim documents are not redistributed.
 
 ## Prototype structure
 
@@ -151,10 +160,8 @@ For hackathon reproducibility, the core pipeline is kept in a single file (`clai
 
 ## Data
 
-This repository does **not** include real patient, hospital, or claim documents. Demo inputs should be user-provided or synthetic. Sample outputs may be included only after removing any personally identifiable or protected health information.
-
----
+This repository does **not** include real patient, hospital, or claim documents. All filenames in `sample_outputs/` have been anonymised — name-like fragments removed. Demo inputs should be user-provided or synthetic.
 
 ## License
 
-See repository license file when published. Competition and model use are subject to [Kaggle](https://www.kaggle.com/competitions/gemma-4-good-hackathon) and [Gemma](https://ai.google.dev/gemma) terms.
+This project is released under the [Apache 2.0 License](LICENSE). Model use subject to [Gemma Terms of Use](https://ai.google.dev/gemma/terms).

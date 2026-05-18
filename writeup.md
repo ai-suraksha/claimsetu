@@ -231,6 +231,6 @@ The public repository does not include real patient, hospital, or claim document
 - [ ] **Special Technology category:** Ollama  
 - [ ] **Repo:** `https://github.com/<your-username>/claimsetu` (replace placeholder)
 - [ ] **Video:** YouTube 3-minute demo (replace `<your-video-id>` placeholder)
-- [ ] **Demo UI:** `uv run uvicorn app:app --reload` → record at http://localhost:8000  
+- [ ] **Demo UI:** `uv run uvicorn app:app --reload` → record at http://localhost:8000/demo
 - [ ] **Files:** `architecture.png`, sample output JSON, screenshots only  
 - [ ] Replace all `<your-username>` and `<your-video-id>` placeholders before submitting

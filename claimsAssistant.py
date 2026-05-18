@@ -180,8 +180,9 @@ except Exception:
     json_repair_loads = json.loads      # stdlib fallback
     print('WARNING: json_repair not available — using stdlib json fallback')
 
-BASE_DATA_DIR = Path(__file__).parent.parent / 'Data' / 'ps1-dataset'
-OUTPUT_ROOT   = Path(__file__).parent.parent / 'outputs'
+BASE_DATA_DIR = Path(os.environ.get('CLAIMSETU_DATA_DIR',
+                     str(Path(__file__).parent / 'Data' / 'claims-datas')))
+OUTPUT_ROOT   = Path(__file__).parent / 'outputs'
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 SUPPORTED_EXT  = {'.pdf', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp'}
@@ -190,7 +191,8 @@ DATE_FIELDS    = {'pre_date', 'post_date', 'doa', 'dod'}
 TEXT_FIELDS    = {'case_id', 'link', 'S3_link/DocumentName', 'S3_link', 's3_link',
                   'procedure_code'}  # all possible link key variants across packages
 
-DECISION_PASS, DECISION_CONDITIONAL, DECISION_FAIL = 'PASS', 'CONDITIONAL', 'FAIL'
+DECISION_PASS, DECISION_CONDITIONAL, DECISION_REVIEW = 'PASS', 'CONDITIONAL', 'REVIEW'
+DECISION_FAIL = DECISION_REVIEW   # alias — hard rule failures surface as REVIEW to reviewers
 
 print('Imports OK. Data dir:', BASE_DATA_DIR.resolve())
 
@@ -3438,7 +3440,7 @@ def evaluate_visual_check(elem: str, visual_agg: dict, required: bool) -> tuple[
     """
     found = visual_agg.get(f'{elem}_present', 0) == 1
     conf  = float(visual_agg.get(f'{elem}_confidence', 0.0))
-    fail_str = 'FAIL' if required else 'ADVISORY_FAIL'
+    fail_str = 'REVIEW' if required else 'ADVISORY_FAIL'
 
     if found:
         return 'PASS', f'{elem} detected (conf={conf:.2f})'
@@ -3450,7 +3452,7 @@ def evaluate_visual_check(elem: str, visual_agg: dict, required: bool) -> tuple[
 def evaluate_operator(value, rule: dict) -> str:
     op   = rule['operator']
     sev  = rule.get('severity', 'mandatory')
-    fail = 'FAIL' if sev == 'mandatory' else 'ADVISORY_FAIL'
+    fail = 'REVIEW' if sev == 'mandatory' else 'ADVISORY_FAIL'
     try:
         if op == 'lte':
             return 'PASS' if float(value) <= rule['threshold'] else fail
@@ -3583,7 +3585,7 @@ def make_decision(claim_id: str, package_code: str,
         return True
 
     # Partition rule failures
-    raw_fails   = [r for r in rule_results if r['result'] == 'FAIL']
+    raw_fails   = [r for r in rule_results if r['result'] == 'REVIEW']
     hard_fails  = [r for r in raw_fails if _is_explicit_contradiction(r)]
     # Demoted: binary fields = 0 (not extracted) → CONDITIONAL, not FAIL
     demoted     = [r for r in raw_fails if not _is_explicit_contradiction(r)]
@@ -3612,7 +3614,7 @@ def make_decision(claim_id: str, package_code: str,
         return ' | '.join(parts)
 
     flags = (
-        [{'severity': 'CRITICAL',    'flag': _prov_str(r)} for r in hard_fails]  +
+        [{'severity': 'REVIEW',      'flag': _prov_str(r)} for r in hard_fails]  +
         [{'severity': 'CONDITIONAL', 'flag': _prov_str(r)} for r in all_conditional] +
         [{'severity': 'ADVISORY',    'flag': _prov_str(r)} for r in advisory]
     )
@@ -3638,8 +3640,8 @@ def make_decision(claim_id: str, package_code: str,
         'decision_summary': (
             f"PASS — all {len(passes)} mandatory checks satisfied."
             if decision == DECISION_PASS else
-            f"FAIL — {len(hard_fails)} explicit clinical contradiction(s)."
-            if decision == DECISION_FAIL else
+            f"REVIEW — {len(hard_fails)} explicit contradiction(s) require human review."
+            if decision == DECISION_REVIEW else
             f"CONDITIONAL — {len(all_conditional)} check(s) missing or uncertain "
             f"(may be extraction gap on scanned/handwritten docs); "
             f"{len(unfilled_mandatory)} evidence slot(s) unfilled."

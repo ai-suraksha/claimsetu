@@ -218,6 +218,7 @@ tr:hover td { background: #fafbff; }
   font-size: 0.78rem; border-left: 3px solid;
 }
 .flag-item.mandatory { background: var(--red-bg);   border-color: #ef4444; }
+.flag-item.review    { background: var(--red-bg);   border-color: #ef4444; }
 .flag-item.advisory  { background: var(--amber-bg); border-color: var(--gold); }
 .flag-item.info      { background: var(--blue-light);border-color: var(--blue-mid); }
 .flag-sev { font-weight: 700; white-space: nowrap; font-size: 0.7rem; margin-top: 0.1rem; }
@@ -528,8 +529,13 @@ function renderResults(d) {
     html += `<div class="section-title">Review Flags</div><div class="flag-list">`;
     flags.forEach(f => {
       const sev = f.severity || 'info';
-      html += `<div class="flag-item ${sev}">
-        <span class="flag-sev tag tag-${sev === 'mandatory' ? 'red' : sev === 'advisory' ? 'amber' : 'blue'}">${sev}</span>
+      const sevLower = sev.toLowerCase();
+      const flagClass = (sevLower === 'review' || sevLower === 'critical') ? 'review'
+                      : sevLower === 'advisory' ? 'advisory' : sevLower;
+      const tagColor = (sevLower === 'review' || sevLower === 'critical') ? 'red'
+                     : sevLower === 'advisory' ? 'amber' : 'blue';
+      html += `<div class="flag-item ${flagClass}">
+        <span class="flag-sev tag tag-${tagColor}">${sev}</span>
         <span>${f.flag || ''}</span>
       </div>`;
     });
