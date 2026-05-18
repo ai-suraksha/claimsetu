@@ -109,10 +109,14 @@ async def process_claim(
     saved_paths: list[Path] = []
     try:
         for upload in files:
-            suffix = Path(upload.filename or "doc").suffix.lower()
+            # webkitdirectory sends filename as "FolderName/file.pdf" — flatten to just the file
+            raw_name = upload.filename or "doc"
+            flat_name = Path(raw_name).name          # strip any subfolder prefix
+            suffix = Path(flat_name).suffix.lower()
             if suffix not in ca.SUPPORTED_EXT:
                 continue
-            dest = tmp_dir / (upload.filename or f"file{suffix}")
+            dest = tmp_dir / flat_name
+            dest.parent.mkdir(parents=True, exist_ok=True)
             with dest.open("wb") as f:
                 shutil.copyfileobj(upload.file, f)
             saved_paths.append(dest)

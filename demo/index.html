@@ -44,20 +44,8 @@ header {
   box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
 .logo { display: flex; align-items: center; gap: 0.75rem; }
-.logo-icon {
-  width: 36px; height: 36px; background: var(--gold);
-  border-radius: 8px; display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 1rem; color: var(--blue-dark);
-}
 .logo-text h1 { font-size: 1.2rem; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
 .logo-text p  { font-size: 0.72rem; color: rgba(255,255,255,0.65); margin-top: 1px; }
-.header-badges { display: flex; gap: 0.5rem; align-items: center; }
-.badge {
-  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
-  padding: 0.25rem 0.6rem; border-radius: 4px;
-}
-.badge-gold  { background: var(--gold); color: var(--blue-dark); }
-.badge-white { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25); }
 
 /* ── Status bar ── */
 #statusBar {
@@ -112,7 +100,10 @@ select:focus { outline: none; border-color: var(--blue-mid); box-shadow: 0 0 0 3
   position: relative;
 }
 .drop-zone:hover, .drop-zone.over { background: var(--blue-light); border-color: var(--blue-mid); }
-.drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop-zone input {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .drop-icon { font-size: 2rem; margin-bottom: 0.4rem; }
 .drop-label { font-size: 0.82rem; font-weight: 600; color: var(--blue); }
 .drop-sub   { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; }
@@ -245,15 +236,10 @@ tr:hover td { background: #fafbff; }
 
 <header>
   <div class="logo">
-    <div class="logo-icon">CS</div>
     <div class="logo-text">
       <h1>ClaimSetu</h1>
       <p>Explainable Claim Review for Public Health Insurance</p>
     </div>
-  </div>
-  <div class="header-badges">
-    <span class="badge badge-white">Gemma 4 Good Hackathon</span>
-    <span class="badge badge-gold">🏆 Kaggle</span>
   </div>
 </header>
 
@@ -289,10 +275,10 @@ tr:hover td { background: #fafbff; }
           <div class="drop-zone" id="dropZone">
             <input type="file" id="fileInput" multiple
                    accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp"
-                   webkitdirectory>
+                   webkitdirectory directory>
             <div class="drop-icon">📂</div>
-            <div class="drop-label">Drop claim folder here, or click to select folder</div>
-            <div class="drop-sub">Selects all files inside the folder · PDF · JPG · PNG · TIFF</div>
+            <div class="drop-label">Drag and drop claim folder here</div>
+            <div class="drop-sub">or <span id="browseBtn" style="color:var(--blue-mid);cursor:pointer;text-decoration:underline;">click to browse</span> · PDF · JPG · PNG · TIFF</div>
             <div class="file-chips" id="fileChips"></div>
           </div>
         </div>
@@ -337,7 +323,7 @@ tr:hover td { background: #fafbff; }
 </div><!-- .layout -->
 
 <script>
-const API = 'http://localhost:8000';
+const API = window.location.origin;
 
 // ── Status bar ────────────────────────────────────────────────────────────────
 async function checkHealth() {
@@ -372,13 +358,59 @@ let selectedFiles = [];
 const dz = document.getElementById('dropZone');
 const fi = document.getElementById('fileInput');
 
-dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('over'));
-dz.addEventListener('drop', e => {
-  e.preventDefault(); dz.classList.remove('over');
-  selectedFiles = [...e.dataTransfer.files]; renderChips();
+function openFilePicker() {
+  fi.click();
+}
+dz.addEventListener('click', openFilePicker);
+document.getElementById('browseBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  openFilePicker();
 });
-fi.addEventListener('change', () => { selectedFiles = [...fi.files]; renderChips(); });
+
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+
+dz.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dz.classList.remove('over');
+
+  const EXTS = /\.(pdf|jpg|jpeg|png|tif|tiff|bmp)$/i;
+  const collected = [];
+
+  async function readEntry(entry) {
+    if (entry.isFile) {
+      await new Promise(res => entry.file(f => { if (EXTS.test(f.name)) collected.push(f); res(); }));
+    } else if (entry.isDirectory) {
+      await new Promise(res => {
+        entry.createReader().readEntries(async entries => {
+          for (const e2 of entries) await readEntry(e2);
+          res();
+        });
+      });
+    }
+  }
+
+  const items = [...e.dataTransfer.items];
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) await readEntry(entry);
+  }
+
+  if (collected.length) {
+    selectedFiles = collected;
+  } else {
+    // Fallback: dataTransfer.files (no FileSystem API)
+    selectedFiles = [...e.dataTransfer.files].filter(f => EXTS.test(f.name));
+  }
+  renderChips();
+});
+
+fi.addEventListener('change', () => {
+  const EXTS = /\.(pdf|jpg|jpeg|png|tif|tiff|bmp)$/i;
+  selectedFiles = [...fi.files].filter(f => EXTS.test(f.name));
+  renderChips();
+});
 
 function renderChips() {
   const el = document.getElementById('fileChips');
@@ -446,7 +478,7 @@ function renderResults(d) {
   // Reasoning summary (26B output)
   const rs = d.reasoning_summary || {};
   if (rs.reviewer_summary) {
-    html += `<div class="section-title">Gemma 4 26B — Reviewer Reasoning</div>
+    html += `<div class="section-title">Reviewer Reasoning</div>
     <div style="background:#f8faff; border:1px solid var(--border); border-radius:8px; padding:1rem; margin-bottom:1.25rem; font-size:0.82rem;">
       <p style="margin-bottom:0.6rem;">${rs.reviewer_summary}</p>`;
     if (rs.key_evidence?.length) {
@@ -545,7 +577,7 @@ function renderResults(d) {
   // Mode note
   if (d.mode === 'mock') {
     html += `<div class="mode-note">ℹ️ Running in OCR-only mock mode — Ollama not detected.
-      Start Ollama with <code>gemma4:e4b</code> and <code>gemma4:26b</code> for full Gemma 4 inference.</div>`;
+      Start Ollama with the configured edge and reasoning models for full inference.</div>`;
   }
 
   document.getElementById('resultsBody').innerHTML = html;
