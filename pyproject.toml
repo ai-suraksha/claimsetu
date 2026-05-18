@@ -14,8 +14,8 @@ dependencies = [
     "opencv-python-headless>=4.9.0",
     "pytesseract>=0.3.10",
     # PaddleOCR — primary OCR engine (PP-OCRv4)
-    # Install separately if paddlepaddle wheel is unavailable for your platform:
-    #   pip install paddlepaddle paddleocr
+    # setuptools is required by paddlepaddle at runtime (uv excludes it by default)
+    "setuptools>=68",
     "paddlepaddle>=2.6.0",
     "paddleocr>=2.7.0",
     # Barcode / QR detection

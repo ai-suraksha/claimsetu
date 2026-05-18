@@ -234,6 +234,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "pyzbar" },
     { name = "rapidfuzz" },
+    { name = "setuptools" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -255,6 +256,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "pyzbar", specifier = ">=0.1.9" },
     { name = "rapidfuzz", specifier = ">=3.9.0" },
+    { name = "setuptools", specifier = ">=68" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29.0" },
 ]
 
