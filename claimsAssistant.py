@@ -38,8 +38,8 @@ os.environ.setdefault('FLAGS_use_mkldnn', '0')
 try:
     import nest_asyncio
     nest_asyncio.apply()
-except ImportError:
-    pass
+except (ImportError, ValueError):
+    pass  # nest_asyncio not needed outside Jupyter / incompatible with uvloop
 
 # ── Model config (Gemma 4 via Ollama) ────────────────────────────────────────
 MODEL_CONFIG = {
@@ -52,21 +52,30 @@ MODEL_EDGE   = MODEL_CONFIG["edge_model"]
 MODEL_REASON = MODEL_CONFIG["reasoning_model"]
 
 # ── Ollama availability check ────────────────────────────────────────────────
+# Set OLLAMA_HOST to point to your Ollama instance.
+# If running on the same machine as Ollama: http://localhost:11434
+# If running on a separate machine (e.g. Mac → Johnaic GPU cluster over LAN):
+#   export OLLAMA_HOST=http://<JOHNAIC_IP>:11434
+# Ollama must also be configured to listen on 0.0.0.0 on the server side:
+#   OLLAMA_HOST=0.0.0.0:11434 ollama serve
+OLLAMA_HOST      = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 OLLAMA_AVAILABLE = False
 OLLAMA_VISION    = False
 try:
     import ollama as _ollama_lib
-    _ping = _ollama_lib.list()
+    _ollama_client = _ollama_lib.Client(host=OLLAMA_HOST)
+    _ping = _ollama_client.list()
     OLLAMA_AVAILABLE = True
     try:
-        _info = _ollama_lib.show(MODEL_EDGE)
+        _info = _ollama_client.show(MODEL_EDGE)
         _caps = getattr(_info, 'capabilities', []) or []
         OLLAMA_VISION = 'vision' in _caps
     except Exception:
         OLLAMA_VISION = True   # assume vision for gemma4:e4b
-    print(f'Ollama ready | edge={MODEL_EDGE} | reasoning={MODEL_REASON} | vision={OLLAMA_VISION}')
+    print(f'Ollama ready | host={OLLAMA_HOST} | edge={MODEL_EDGE} | reasoning={MODEL_REASON} | vision={OLLAMA_VISION}')
 except Exception:
-    print('WARNING: Ollama not running — pipeline will use OCR-only mock mode.')
+    _ollama_client = None
+    print(f'WARNING: Ollama not reachable at {OLLAMA_HOST} — pipeline will use OCR-only mock mode.')
     print(f'  To enable full inference: ollama pull {MODEL_EDGE} && ollama pull {MODEL_REASON}')
 
 MOCK_MODE = not OLLAMA_AVAILABLE
@@ -74,9 +83,8 @@ MOCK_MODE = not OLLAMA_AVAILABLE
 TOKEN_LOG = {'input': 0, 'output': 0, 'calls': 0, 'mock_calls': 0}
 
 def _ollama_call(model: str, messages: list) -> str:
-    """Low-level Ollama call. Returns text content string."""
-    import ollama as _ol
-    response = _ol.chat(model=model, messages=messages, options={'temperature': 0.0})
+    """Low-level Ollama call via configured host. Returns text content string."""
+    response = _ollama_client.chat(model=model, messages=messages, options={'temperature': 0.0})
     content = response.message.content or ''
     TOKEN_LOG['calls']  += 1
     TOKEN_LOG['output'] += len(content.split())
@@ -172,8 +180,9 @@ except Exception:
     json_repair_loads = json.loads      # stdlib fallback
     print('WARNING: json_repair not available — using stdlib json fallback')
 
-BASE_DATA_DIR = Path(__file__).parent.parent / 'Data' / 'ps1-dataset'
-OUTPUT_ROOT   = Path(__file__).parent.parent / 'outputs'
+BASE_DATA_DIR = Path(os.environ.get('CLAIMSETU_DATA_DIR',
+                     str(Path(__file__).parent / 'Data' / 'claims-datas')))
+OUTPUT_ROOT   = Path(__file__).parent / 'outputs'
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
 SUPPORTED_EXT  = {'.pdf', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp'}
@@ -182,7 +191,8 @@ DATE_FIELDS    = {'pre_date', 'post_date', 'doa', 'dod'}
 TEXT_FIELDS    = {'case_id', 'link', 'S3_link/DocumentName', 'S3_link', 's3_link',
                   'procedure_code'}  # all possible link key variants across packages
 
-DECISION_PASS, DECISION_CONDITIONAL, DECISION_FAIL = 'PASS', 'CONDITIONAL', 'FAIL'
+DECISION_PASS, DECISION_CONDITIONAL, DECISION_REVIEW = 'PASS', 'CONDITIONAL', 'REVIEW'
+DECISION_FAIL = DECISION_REVIEW   # alias — hard rule failures surface as REVIEW to reviewers
 
 print('Imports OK. Data dir:', BASE_DATA_DIR.resolve())
 
@@ -796,8 +806,6 @@ def _ocr_with_tesseract(img: Image.Image) -> list[dict]:
         print(f'  WARN _ocr_with_tesseract: {e}')
         return []
 
-        return []
-
 # %% CELL 07 — Module 2 Tiers 1+2: Free Classification (zero tokens)
 FILENAME_HINTS = {
     ## Are we handling case sensitivity here ? Upper/Lower/Camel case ?
@@ -1113,7 +1121,7 @@ def _vlm_default(reason: str) -> dict:
 def _mock_vlm_response(img: Image.Image, package_code: str) -> dict:
     """
     Mock Tier 3 for testing without NHAclient.
-    Called automatically when NHA_MOCK_MODE=True.
+    Called automatically when MOCK_MODE=True (Ollama unavailable).
 
     Strategy:
     1. Try pytesseract OCR (if installed + tesseract binary present).
@@ -2482,7 +2490,7 @@ EVENT_DEFS = {
 
 _DATE_PLAUSIBILITY_MIN  = datetime(2020, 1, 1)
 _DATE_PLAUSIBILITY_MAX  = datetime(2026, 12, 31)
-_DATE_TODAY             = datetime(2026, 4, 26)   # competition date — reject future dates
+_DATE_TODAY = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 _LOS_MAX_HARD_REJECT    = 60    # days; DOD-DOA > 60 → hard reject (not just downgrade)
 _LOS_MAX_DOWNGRADE      = 30    # days; DOD-DOA > 30 → conf downgrade to 0.58
 
@@ -2985,21 +2993,21 @@ def derive_temporal_facts(ranked_rows: list[dict], package_code: str) -> dict:
             # Pre-treatment Hb
             if ef.get('hb_value'):
                 try:    hb_pre_values.append(float(ef['hb_value']))
-                except: pass
+                except (TypeError, ValueError, KeyError): pass
 
             # Post-treatment Hb — VLM structured field
             if ef.get('hb_post_value'):
                 try:
                     hb_post_values.append(float(ef['hb_post_value']))
                     post_evidence_found = True
-                except: pass
+                except (TypeError, ValueError, KeyError): pass
 
             # Post-treatment Hb — explicit post_hb_report page
             if doc_type == 'post_hb_report' and ef.get('hb_value'):
                 try:
                     hb_post_values.append(float(ef['hb_value']))
                     post_evidence_found = True
-                except: pass
+                except (TypeError, ValueError, KeyError): pass
 
             # Post-treatment Hb — discharge summary mentions post-transfusion Hb
             if doc_type == 'discharge_summary':
@@ -3013,7 +3021,7 @@ def derive_temporal_facts(ranked_rows: list[dict], package_code: str) -> dict:
                     try:
                         hb_post_values.append(float(post_hb_m.group(1)))
                         post_evidence_found = True
-                    except: pass
+                    except (TypeError, ValueError): pass
 
             # Blood transfusion documented in VLM fields
             if ef.get('blood_transfusion') is True:
@@ -3079,18 +3087,11 @@ def _vlm_crop_date_fallback(
 ) -> Optional['EvidenceAtom']:
     """
     Path 5: Targeted VLM crop for DOA/DOD fields that failed all deterministic paths.
-
-    Confidence policy (conservative):
-      - Base confidence: 0.62 (below the 0.70 threshold → rejected by is_accepted)
-      - Raised to 0.75 ONLY if the extracted date year matches the known DOA year
-        AND the date is >= DOA (for DOD) or makes temporal sense.
-      - This prevents wrong-year VLM outputs (e.g. 2023 when claim is from 2026)
-        from being accepted as "Valid".
+    Uses Gemma 4 E4B (vision) via Ollama when available. Fails closed otherwise.
     """
-    if NHA_MOCK_MODE:
-        return None
+    if MOCK_MODE or not OLLAMA_AVAILABLE or not OLLAMA_VISION:
+        return None   # fail closed — deterministic paths already exhausted
 
-    # Parse known DOA for year validation
     doa_dt: Optional[datetime] = None
     if known_doa:
         doa_dt = parse_date(normalize_date(known_doa))
@@ -3109,30 +3110,24 @@ def _vlm_crop_date_fallback(
                 continue
 
             ocr_lines = row.get('_ocr_lines', [])
-
-            # Find anchor line bbox so we can crop tightly
             crop_bbox: Optional[tuple] = None
             for line in ocr_lines:
                 t = line.get('text', '').lower()
                 if any(a in t for a in aliases):
                     lb = line.get('bbox')
                     if lb:
-                        # Expand right and down from anchor to capture the date value
                         x1 = max(0, lb[0] - 10)
                         y1 = max(0, lb[1] - 5)
-                        x2 = min(img.width, lb[0] + 900)   # wide enough for date value
+                        x2 = min(img.width, lb[0] + 900)
                         y2 = min(img.height, lb[3] + 40)
                         crop_bbox = (x1, y1, x2, y2)
                     break
 
-            # Fallback: if no anchor bbox found, use top 40% of page
-            # (DOA/DOD labels typically appear in the header section)
             if crop_bbox is None:
                 crop_bbox = (0, 0, img.width, int(img.height * 0.40))
 
             try:
                 crop_img = img.crop(crop_bbox)
-                # Upscale crop for better OCR recognition
                 scale = max(1, min(3, 800 // max(crop_img.width, 1)))
                 if scale > 1:
                     crop_img = crop_img.resize(
@@ -3150,71 +3145,54 @@ def _vlm_crop_date_fallback(
             )
 
             try:
-                if OLLAMA_MODE and OLLAMA_VISION:
-                    raw_response = ollama_vlm_call(crop_img, prompt)
-                elif not NHA_MOCK_MODE and nc is not None:
-                    b64 = page_to_base64(crop_img)
-                    messages = [{'role': 'user', 'content': [
-                        {'type': 'image_url',
-                         'image_url': {'url': f'data:image/jpeg;base64,{b64}'}},
-                        {'type': 'text', 'text': prompt},
-                    ]}]
-                    resp = nha_call(messages, model=MODEL_VISION,
-                                   metadata={'problem_statement': 1})
-                    raw_response = _extract_content(resp)
-                else:
-                    continue   # no VLM available
-
+                raw_response = edge_model_call(crop_img, prompt)
                 raw_response = raw_response.strip()
                 if not raw_response or 'NOT_FOUND' in raw_response.upper():
                     continue
-
-                # Extract just the date from the response (model may add extra words)
-                date_match = None
-                for pat in DATE_PATTERNS:
-                    hits = re.findall(pat, _strip_time_suffix(raw_response))
-                    if hits:
-                        date_match = hits[0]
-                        break
-
-                if not date_match:
-                    continue
-
-                nd = normalize_date(date_match)
-                if nd is None:
-                    continue
-
-                # Plausibility check — reject hallucinated dates
-                dt_obj = parse_date(nd)
-                if dt_obj is None:
-                    continue
-                if not (_DATE_PLAUSIBILITY_MIN <= dt_obj <= _DATE_PLAUSIBILITY_MAX):
-                    continue
-
-                # Confidence policy: conservative base, raised only if year-validated.
-                # Base 0.62 is below _DATE_MIN_CONFIDENCE (0.70) so it won't be accepted
-                # unless we can validate the year against known DOA.
-                crop_conf = 0.62
-                if doa_dt:
-                    if abs(dt_obj.year - doa_dt.year) <= 1:
-                        if target_field == 'dod' and dt_obj < doa_dt:
-                            continue
-                        crop_conf = 0.75
-                    else:
-                        continue   # year mismatch — skip this crop result
-                else:
-                    if dt_obj.year < 2022:
-                        continue
-                return EvidenceAtom(
-                    field=target_field, value=date_match, normalized=nd,
-                    source_doc=priority_doc, page=row.get('page_number', 0),
-                    bbox=list(crop_bbox), source_text=f'VLM crop response: {raw_response[:60]}',
-                    method='vlm_crop',
-                    anchor_label=f'VLM crop ({target_field})',
-                    confidence=crop_conf,
-                )
-            except Exception:
+            except Exception as e:
+                print(f'  WARN _vlm_crop_date_fallback: edge model call failed: {e}')
                 continue
+
+            date_match = None
+            for pat in DATE_PATTERNS:
+                hits = re.findall(pat, _strip_time_suffix(raw_response))
+                if hits:
+                    date_match = hits[0]
+                    break
+
+            if not date_match:
+                continue
+
+            nd = normalize_date(date_match)
+            if nd is None:
+                continue
+
+            dt_obj = parse_date(nd)
+            if dt_obj is None:
+                continue
+            if not (_DATE_PLAUSIBILITY_MIN <= dt_obj <= _DATE_PLAUSIBILITY_MAX):
+                continue
+
+            crop_conf = 0.62
+            if doa_dt:
+                if abs(dt_obj.year - doa_dt.year) <= 1:
+                    if target_field == 'dod' and dt_obj < doa_dt:
+                        continue
+                    crop_conf = 0.75
+                else:
+                    continue
+            else:
+                if dt_obj.year < 2022:
+                    continue
+
+            return EvidenceAtom(
+                field=target_field, value=date_match, normalized=nd,
+                source_doc=priority_doc, page=row.get('page_number', 0),
+                bbox=list(crop_bbox), source_text=f'VLM crop response: {raw_response[:60]}',
+                method='vlm_crop',
+                anchor_label=f'VLM crop ({target_field})',
+                confidence=crop_conf,
+            )
 
     return None   # all attempts failed
 
@@ -3462,7 +3440,7 @@ def evaluate_visual_check(elem: str, visual_agg: dict, required: bool) -> tuple[
     """
     found = visual_agg.get(f'{elem}_present', 0) == 1
     conf  = float(visual_agg.get(f'{elem}_confidence', 0.0))
-    fail_str = 'FAIL' if required else 'ADVISORY_FAIL'
+    fail_str = 'REVIEW' if required else 'ADVISORY_FAIL'
 
     if found:
         return 'PASS', f'{elem} detected (conf={conf:.2f})'
@@ -3474,7 +3452,7 @@ def evaluate_visual_check(elem: str, visual_agg: dict, required: bool) -> tuple[
 def evaluate_operator(value, rule: dict) -> str:
     op   = rule['operator']
     sev  = rule.get('severity', 'mandatory')
-    fail = 'FAIL' if sev == 'mandatory' else 'ADVISORY_FAIL'
+    fail = 'REVIEW' if sev == 'mandatory' else 'ADVISORY_FAIL'
     try:
         if op == 'lte':
             return 'PASS' if float(value) <= rule['threshold'] else fail
@@ -3607,7 +3585,7 @@ def make_decision(claim_id: str, package_code: str,
         return True
 
     # Partition rule failures
-    raw_fails   = [r for r in rule_results if r['result'] == 'FAIL']
+    raw_fails   = [r for r in rule_results if r['result'] == 'REVIEW']
     hard_fails  = [r for r in raw_fails if _is_explicit_contradiction(r)]
     # Demoted: binary fields = 0 (not extracted) → CONDITIONAL, not FAIL
     demoted     = [r for r in raw_fails if not _is_explicit_contradiction(r)]
@@ -3636,7 +3614,7 @@ def make_decision(claim_id: str, package_code: str,
         return ' | '.join(parts)
 
     flags = (
-        [{'severity': 'CRITICAL',    'flag': _prov_str(r)} for r in hard_fails]  +
+        [{'severity': 'REVIEW',      'flag': _prov_str(r)} for r in hard_fails]  +
         [{'severity': 'CONDITIONAL', 'flag': _prov_str(r)} for r in all_conditional] +
         [{'severity': 'ADVISORY',    'flag': _prov_str(r)} for r in advisory]
     )
@@ -3662,8 +3640,8 @@ def make_decision(claim_id: str, package_code: str,
         'decision_summary': (
             f"PASS — all {len(passes)} mandatory checks satisfied."
             if decision == DECISION_PASS else
-            f"FAIL — {len(hard_fails)} explicit clinical contradiction(s)."
-            if decision == DECISION_FAIL else
+            f"REVIEW — {len(hard_fails)} explicit contradiction(s) require human review."
+            if decision == DECISION_REVIEW else
             f"CONDITIONAL — {len(all_conditional)} check(s) missing or uncertain "
             f"(may be extraction gap on scanned/handwritten docs); "
             f"{len(unfilled_mandatory)} evidence slot(s) unfilled."
@@ -4012,7 +3990,7 @@ def process_claim(claim: dict, stg_configs: dict) -> dict:
     if not valid:
         print(f'  SCHEMA WARNING {claim_id}:', issues[:2])
 
-    return {
+    result = {
         'claim_id':          claim_id,
         'package_code':      package_code,
         'json_rows':         export_rows,
@@ -4025,10 +4003,93 @@ def process_claim(claim: dict, stg_configs: dict) -> dict:
         'timeline_df':       build_timeline_table(timeline),
         'decision':          decision_obj,
         'visual_agg':        visual_agg,
-        'temporal_facts':    temporal_facts,   # top-level for eval harness access
+        'temporal_facts':    temporal_facts,
     }
 
+    # ── Stage 5: Gemma 4 26B reviewer reasoning ───────────────────────────────
+    # Deterministic rules produce the decision. 26B produces the explanation.
+    result['reasoning_summary'] = generate_claim_reasoning_with_26b({
+        'claim_id':          claim_id,
+        'package_code':      package_code,
+        'decision':          decision_obj.get('decision'),
+        'confidence':        decision_obj.get('confidence'),
+        'flags':             decision_obj.get('flags', []),
+        'evidence_coverage': {
+            slot: {'filled': info['filled'], 'doc_type': info.get('doc_type'),
+                   'confidence': round(info['confidence'], 2)}
+            for slot, info in evidence_coverage.items()
+        },
+        'timeline':          timeline,
+        'document_count':    len(logical_docs),
+        'unfilled_mandatory': [
+            s for s, i in evidence_coverage.items()
+            if not i['filled'] and i.get('role') == 'mandatory'
+        ],
+    })
+    return result
+
 print('Pipeline runner ready.')
+
+def generate_claim_reasoning_with_26b(claim_context: dict) -> dict:
+    """
+    Stage 5 (M1 fix): Gemma 4 26B generates a reviewer-facing explanation
+    grounded in deterministic rule findings and extracted evidence.
+
+    The deterministic rules engine produces the PASS/CONDITIONAL/REVIEW decision.
+    26B produces the human-readable explanation, key evidence summary, and
+    recommended next action — it does NOT override the decision.
+
+    Fails gracefully: if Ollama is unavailable or output cannot be parsed,
+    returns a safe default that preserves the deterministic decision.
+    """
+    _SAFE_DEFAULT = {
+        'reviewer_summary':        'Claim review based on deterministic rule findings.',
+        'key_evidence':            [],
+        'risk_flags':              [],
+        'missing_evidence':        claim_context.get('unfilled_mandatory', []),
+        'recommended_next_action': 'Human reviewer should inspect extracted evidence and source documents.',
+        'safety_note':             'This is an assistive recommendation. Final claim decision requires human review.',
+    }
+
+    if MOCK_MODE or not OLLAMA_AVAILABLE:
+        return _SAFE_DEFAULT
+
+    prompt = f"""You are a claim review assistant for public health insurance.
+You do not approve or reject claims. You explain evidence for a human reviewer.
+
+Given the structured claim context below, produce valid JSON only. No markdown.
+
+Required JSON schema:
+{{
+  "reviewer_summary": "2-3 sentence plain-language summary of the claim evidence quality",
+  "key_evidence": ["list of the strongest evidence items found"],
+  "risk_flags": ["list of clinical or billing concerns, empty list if none"],
+  "missing_evidence": ["list of missing mandatory documents or evidence slots"],
+  "recommended_next_action": "what the human reviewer should do next",
+  "safety_note": "always include: This is an assistive recommendation. Final claim decision requires human review."
+}}
+
+Rules:
+- Do not invent facts. Use only the provided evidence context.
+- Do not make final medical, diagnostic, or payment decisions.
+- If evidence is weak, missing, or contradictory, recommend human review.
+- Keep each field concise. reviewer_summary max 3 sentences.
+
+CLAIM_CONTEXT:
+{json.dumps(claim_context, indent=2, ensure_ascii=False, default=str)}
+"""
+    try:
+        raw = reason_model_call(json.dumps(claim_context, ensure_ascii=False, default=str), prompt)
+        parsed = safe_parse_vlm(raw)
+        if isinstance(parsed, dict) and parsed.get('reviewer_summary'):
+            # Enforce safety note is always present
+            if not parsed.get('safety_note'):
+                parsed['safety_note'] = _SAFE_DEFAULT['safety_note']
+            return parsed
+    except Exception as e:
+        print(f'  WARN generate_claim_reasoning_with_26b: {e}')
+
+    return _SAFE_DEFAULT
 
 # ── solutionFlow.md stage function aliases ────────────────────────────────────
 # These names match the architecture documented in solutionFlow.md exactly.

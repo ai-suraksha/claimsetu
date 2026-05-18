@@ -5,7 +5,7 @@ description = "Explainable claim-review assistant for public health insurance â€
 requires-python = ">=3.10"
 dependencies = [
     # Web layer
-    "fastapi>=0.111.0",
+    "fastapi[standard]>=0.111.0",
     "uvicorn[standard]>=0.29.0",
     "python-multipart>=0.0.9",
     # Document reading (OCR)
@@ -14,8 +14,8 @@ dependencies = [
     "opencv-python-headless>=4.9.0",
     "pytesseract>=0.3.10",
     # PaddleOCR â€” primary OCR engine (PP-OCRv4)
-    # Install separately if paddlepaddle wheel is unavailable for your platform:
-    #   pip install paddlepaddle paddleocr
+    # setuptools is required by paddlepaddle at runtime (uv excludes it by default)
+    "setuptools>=68",
     "paddlepaddle>=2.6.0",
     "paddleocr>=2.7.0",
     # Barcode / QR detection
@@ -39,5 +39,8 @@ claimsetu = "app:main"
 # Run: uv sync && uv run uvicorn app:app --reload
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["claimsAssistant", "app"]
