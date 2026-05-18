@@ -220,6 +220,15 @@ __marimo__/
 # ClaimSetu — local data and outputs (never commit patient/claim documents)
 Data/
 outputs/
+.venv/
+*.egg-info/
+
+# sample_outputs/ is intentionally committed — contains one anonymised claim
+# output (decision.json, classification.csv, timeline.csv) and public STG PDFs.
+# Do NOT add sample_outputs/ here.
 
 # macOS
 .DS_Store
+
+# Local env — never commit secrets or host config
+.env

@@ -38,8 +38,8 @@ os.environ.setdefault('FLAGS_use_mkldnn', '0')
 try:
     import nest_asyncio
     nest_asyncio.apply()
-except ImportError:
-    pass
+except (ImportError, ValueError):
+    pass  # nest_asyncio not needed outside Jupyter / incompatible with uvloop
 
 # ── Model config (Gemma 4 via Ollama) ────────────────────────────────────────
 MODEL_CONFIG = {
@@ -52,21 +52,30 @@ MODEL_EDGE   = MODEL_CONFIG["edge_model"]
 MODEL_REASON = MODEL_CONFIG["reasoning_model"]
 
 # ── Ollama availability check ────────────────────────────────────────────────
+# Set OLLAMA_HOST to point to your Ollama instance.
+# If running on the same machine as Ollama: http://localhost:11434
+# If running on a separate machine (e.g. Mac → Johnaic GPU cluster over LAN):
+#   export OLLAMA_HOST=http://<JOHNAIC_IP>:11434
+# Ollama must also be configured to listen on 0.0.0.0 on the server side:
+#   OLLAMA_HOST=0.0.0.0:11434 ollama serve
+OLLAMA_HOST      = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 OLLAMA_AVAILABLE = False
 OLLAMA_VISION    = False
 try:
     import ollama as _ollama_lib
-    _ping = _ollama_lib.list()
+    _ollama_client = _ollama_lib.Client(host=OLLAMA_HOST)
+    _ping = _ollama_client.list()
     OLLAMA_AVAILABLE = True
     try:
-        _info = _ollama_lib.show(MODEL_EDGE)
+        _info = _ollama_client.show(MODEL_EDGE)
         _caps = getattr(_info, 'capabilities', []) or []
         OLLAMA_VISION = 'vision' in _caps
     except Exception:
         OLLAMA_VISION = True   # assume vision for gemma4:e4b
-    print(f'Ollama ready | edge={MODEL_EDGE} | reasoning={MODEL_REASON} | vision={OLLAMA_VISION}')
+    print(f'Ollama ready | host={OLLAMA_HOST} | edge={MODEL_EDGE} | reasoning={MODEL_REASON} | vision={OLLAMA_VISION}')
 except Exception:
-    print('WARNING: Ollama not running — pipeline will use OCR-only mock mode.')
+    _ollama_client = None
+    print(f'WARNING: Ollama not reachable at {OLLAMA_HOST} — pipeline will use OCR-only mock mode.')
     print(f'  To enable full inference: ollama pull {MODEL_EDGE} && ollama pull {MODEL_REASON}')
 
 MOCK_MODE = not OLLAMA_AVAILABLE
@@ -74,9 +83,8 @@ MOCK_MODE = not OLLAMA_AVAILABLE
 TOKEN_LOG = {'input': 0, 'output': 0, 'calls': 0, 'mock_calls': 0}
 
 def _ollama_call(model: str, messages: list) -> str:
-    """Low-level Ollama call. Returns text content string."""
-    import ollama as _ol
-    response = _ol.chat(model=model, messages=messages, options={'temperature': 0.0})
+    """Low-level Ollama call via configured host. Returns text content string."""
+    response = _ollama_client.chat(model=model, messages=messages, options={'temperature': 0.0})
     content = response.message.content or ''
     TOKEN_LOG['calls']  += 1
     TOKEN_LOG['output'] += len(content.split())

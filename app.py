@@ -18,6 +18,16 @@ import shutil
 from pathlib import Path
 from typing import List
 
+# Load .env before anything else — so OLLAMA_HOST etc. are set before claimsAssistant imports
+_env_file = Path(__file__).parent / ".env"
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _, _v = _line.partition("=")
+            import os as _os
+            _os.environ.setdefault(_k.strip(), _v.strip())
+
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -61,6 +71,7 @@ def health():
         return {
             "status": "ok",
             "mode": "live" if ca.OLLAMA_AVAILABLE else "mock",
+            "ollama_host": ca.OLLAMA_HOST,
             "edge_model": ca.MODEL_EDGE,
             "reasoning_model": ca.MODEL_REASON,
             "ocr": {

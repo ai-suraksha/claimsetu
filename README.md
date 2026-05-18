@@ -128,13 +128,16 @@ Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma
 
 ## Repository
 
-| File | Description |
-|------|-------------|
+| File / Folder | Description |
+|---|---|
 | [problemStatement.md](problemStatement.md) | Problem, gap, objective, and safety framing |
 | [solutionFlow.md](solutionFlow.md) | Hybrid OCR + Gemma architecture and pipeline stages |
 | [claimsAssistant.py](claimsAssistant.py) | Core claim processing pipeline (OCR → E4B → validators → 26B → reviewer pack) |
-| [app.py](app.py) | FastAPI web app + demo UI (upload files → get PASS/CONDITIONAL/REVIEW) |
+| [app.py](app.py) | FastAPI web app + demo UI (`/demo`) |
 | [pyproject.toml](pyproject.toml) | uv project config and dependencies |
+| [demo/index.html](demo/index.html) | Standalone demo UI for recording (served at `/demo`) |
+| [stg-knowledgeBase/](stg-knowledgeBase/) | Public Standard Treatment Guidelines (4 STG PDFs — MG064A, SG039C, MG006A, SB039A) |
+| [sample_outputs/](sample_outputs/) | One anonymised sample claim output (decision, classification, timeline) |
 
 ---
 

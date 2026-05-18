@@ -287,10 +287,11 @@ tr:hover td { background: #fafbff; }
           <label>Claim Documents</label>
           <div class="drop-zone" id="dropZone">
             <input type="file" id="fileInput" multiple
-                   accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp">
+                   accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp"
+                   webkitdirectory>
             <div class="drop-icon">📂</div>
-            <div class="drop-label">Drop files here or click to browse</div>
-            <div class="drop-sub">PDF · JPG · PNG · TIFF supported</div>
+            <div class="drop-label">Drop claim folder here, or click to select folder</div>
+            <div class="drop-sub">Selects all files inside the folder · PDF · JPG · PNG · TIFF</div>
             <div class="file-chips" id="fileChips"></div>
           </div>
         </div>
@@ -351,6 +352,7 @@ async function checkHealth() {
     const ocrOk = d.ocr?.paddle || d.ocr?.tesseract;
     setDot('ocrDot', ocrOk ? 'green' : 'amber');
     setStatus('ocrStatus', 'OCR: ' + (d.ocr?.paddle ? 'PaddleOCR' : d.ocr?.tesseract ? 'Tesseract' : 'unavailable'));
+    if (d.ollama_host) setStatus('apiStatus', `API: connected · Ollama @ ${d.ollama_host}`);
   } catch {
     setDot('apiDot', ''); setStatus('apiStatus', 'API: not reachable — start uvicorn');
   }
@@ -379,8 +381,15 @@ fi.addEventListener('change', () => { selectedFiles = [...fi.files]; renderChips
 
 function renderChips() {
   const el = document.getElementById('fileChips');
-  el.innerHTML = selectedFiles.map(f =>
-    `<span class="chip" title="${f.name}">${f.name}</span>`).join('');
+  if (!selectedFiles.length) { el.innerHTML = ''; return; }
+  const folderName = selectedFiles[0].webkitRelativePath
+    ? selectedFiles[0].webkitRelativePath.split('/')[0] : null;
+  const supported = selectedFiles.filter(f =>
+    /\.(pdf|jpg|jpeg|png|tif|tiff|bmp)$/i.test(f.name));
+  el.innerHTML = folderName
+    ? `<span class="chip" title="${folderName}">📁 ${folderName}</span>
+       <span class="chip">${supported.length} file${supported.length !== 1 ? 's' : ''} selected</span>`
+    : selectedFiles.map(f => `<span class="chip" title="${f.name}">${f.name}</span>`).join('');
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
