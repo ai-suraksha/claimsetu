@@ -39,5 +39,8 @@ claimsetu = "app:main"
 # Run: uv sync && uv run uvicorn app:app --reload
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["claimsAssistant", "app"]
