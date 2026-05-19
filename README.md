@@ -63,8 +63,6 @@ uv run uvicorn app:app --reload
 # → Open http://localhost:8000/demo
 ```
 
-Place claim documents under `Data/claims-datas/<PACKAGE_CODE>/<CLAIM_ID>/` (see Data section below). The `Data/` folder is git-ignored.
-
 **Run pipeline directly (no UI):**
 
 ```bash
@@ -106,23 +104,6 @@ ClaimSetu is a **reviewer co-pilot**, not an autonomous adjudicator.
 - Recommendations are evidence-backed and intended for human verification.  
 - Weak, missing, or contradictory evidence escalates to **CONDITIONAL** or **REVIEW** rather than forcing a PASS.  
 - The system does not diagnose patients, interpret imaging for clinical conclusions, or issue final payment decisions.
-
----
-
-## Gemma 4 Good Hackathon
-
-Built for the [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) on Kaggle—focused on local, transparent AI that supports equitable access to publicly funded healthcare.
-
-**Design goals:** stable demo · clean repo · repeatable outputs · fast enough local execution · clear explanation of why Gemma adds value on top of traceable OCR.
-
-**Model stack (locked):**
-
-| Use | Choice |
-|-----|--------|
-| OCR + bbox provenance | PaddleOCR + PyTesseract |
-| Edge page layer | Gemma 4 E4B |
-| Claim reasoning layer | Gemma 4 26B |
-| Final audit | Skip 31B |
 
 ---
 
