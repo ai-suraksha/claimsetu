@@ -55,7 +55,7 @@ Input claim packet
 | Reason | `reason_claim_with_26b()` | Gemma 4 26B |
 | Output | `generate_reviewer_summary()` | Reviewer pack + provenance |
 
-### Planned configuration
+### Reference configuration
 
 ```python
 MODEL_CONFIG = {
@@ -85,7 +85,7 @@ ClaimSetu uses a **two-model strategy**:
 1. **Edge model (Gemma 4 E4B)** — page-level cleanup, document triage, lightweight classification, and structured extraction from noisy OCR. Keeps the pipeline lightweight and deployable on consumer hardware.
 2. **Reasoning model (Gemma 4 26B)** — claim-level timeline interpretation, package/STG rule checks, contradiction analysis, and final recommendation with human-readable explanation. Invoked when deeper clinical or administrative reasoning is required.
 
-**Why not Gemma 4 31B?** For this submission, 31B adds complexity without enough scoring upside. The stack optimises for a stable demo, clean repo, repeatable outputs, and fast enough local execution. **26B** is the practical “main brain” — stronger than edge models, more reproducible than 31B.
+**Why not Gemma 4 31B?** The default stack uses E4B and 26B for predictable local execution. **26B** is the practical reasoning layer — stronger than edge models, with a practical footprint for repeatable prototype runs.
 
 ### Escalation rule
 
@@ -243,7 +243,7 @@ Each rule finding includes status (pass / not_met / conditional / advisory), rea
 
 ClaimSetu does **not** replace adjudicators. Reviewers see what was submitted, what was extracted, what rules ran, why the claim was flagged, and what clarification is needed.
 
-**Demo narrative:** ClaimSetu uses OCR for traceable document reading, an edge model for fast page-level understanding, and a stronger reasoning model for claim-level review. The system never makes a black-box decision — every recommendation links back to extracted evidence.
+ClaimSetu uses OCR for traceable document reading, an edge model for fast page-level understanding, and a stronger reasoning model for claim-level review. The system never makes a black-box decision — every recommendation links back to extracted evidence.
 
 ---
 
@@ -254,6 +254,6 @@ ClaimSetu does **not** replace adjudicators. Reviewers see what was submitted, w
 | **OCR reads, Gemma understands** | PaddleOCR + PyTesseract for provenance; E4B/26B for structure and reasoning |
 | **Deterministic safety** | Gates and validators before and alongside model outputs |
 | **Tiered cost** | Filename/keywords → E4B → 26B escalation only when needed |
-| **No 31B** | Skipped for reproducibility and demo stability |
+| **No 31B in default stack** | E4B + 26B chosen for predictable local execution |
 | **Provenance by default** | EvidenceAtom on every material field |
 | **Reviewer sovereignty** | PASS / CONDITIONAL / REVIEW as recommendations only |

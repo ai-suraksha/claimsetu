@@ -1,7 +1,7 @@
 [project]
 name = "claimsetu"
 version = "0.1.0"
-description = "Explainable claim-review assistant for public health insurance — Gemma 4 Good Hackathon"
+description = "Explainable claim-review assistant for public health insurance workflows"
 requires-python = ">=3.10"
 dependencies = [
     # Web layer
