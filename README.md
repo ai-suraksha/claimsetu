@@ -37,7 +37,7 @@ Static materials for walkthroughs and presentations (also listed in the reposito
 | [demo/claimsetu_thumbnail.png](demo/claimsetu_thumbnail.png) | Project thumbnail / media asset |
 | [demo/index.html](demo/index.html) | Interactive demo UI (served at `/demo` when the app is running) |
 
-**Live demo:** after setup, run `uv run uvicorn app:app --reload` and open [http://localhost:8000/demo](http://localhost:8000/demo). Upload your own claim packet (PDF/images) under `Data/claims-data/` or via the UI.
+**Live demo:** after setup, run `uv run uvicorn app:app --reload` and open [http://localhost:8000/demo](http://localhost:8000/demo). For direct batch runs, place files under `Data/claims-data/`. For the web UI, upload files directly.
 
 ---
 
@@ -165,7 +165,7 @@ The pipeline was validated on a private set of 40 real-world health insurance cl
 | Metric | Notes |
 |--------|-------|
 | Document classification | Tier 1/2 (filename + keyword) correct on the majority of pages; Tier 3 (E4B) handles ambiguous pages |
-| Mandatory slot fill rate | 4 of 5 slots filled on the sample claim; pre-treatment evidence the most common gap on scanned packets |
+| Mandatory slot fill rate | 4 of 5 slots filled on a held-out validation claim; pre-treatment evidence the most common gap on scanned packets |
 | Date extraction | DOA/DOD extracted where digital text present; correctly marked unverifiable on scanned/handwritten pages |
 | Hallucinated-date rejection | Dates contradicting source documents rejected by the 4-condition acceptance gate |
 
