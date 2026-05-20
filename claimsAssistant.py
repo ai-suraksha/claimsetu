@@ -3,7 +3,7 @@
 from __future__ import annotations   # must be first executable line
 # ============================================================
 # ClaimSetu — Claims Intelligence Pipeline
-# Gemma 4 Good Hackathon (Kaggle) — Public Health Insurance
+# Public health insurance — hybrid OCR + Gemma 4
 # ============================================================
 #
 # Architecture: OCR reads → E4B structures → 26B reasons → humans decide
@@ -54,8 +54,8 @@ MODEL_REASON = MODEL_CONFIG["reasoning_model"]
 # ── Ollama availability check ────────────────────────────────────────────────
 # Set OLLAMA_HOST to point to your Ollama instance.
 # If running on the same machine as Ollama: http://localhost:11434
-# If running on a separate machine (e.g. Mac → Johnaic GPU cluster over LAN):
-#   export OLLAMA_HOST=http://<JOHNAIC_IP>:11434
+# If running on a separate machine (e.g. laptop → remote GPU host over LAN):
+#   export OLLAMA_HOST=http://<REMOTE_HOST_IP>:11434
 # Ollama must also be configured to listen on 0.0.0.0 on the server side:
 #   OLLAMA_HOST=0.0.0.0:11434 ollama serve
 OLLAMA_HOST      = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
@@ -181,7 +181,7 @@ except Exception:
     print('WARNING: json_repair not available — using stdlib json fallback')
 
 BASE_DATA_DIR = Path(os.environ.get('CLAIMSETU_DATA_DIR',
-                     str(Path(__file__).parent / 'Data' / 'claims-datas')))
+                     str(Path(__file__).parent / 'Data' / 'claims-data')))
 OUTPUT_ROOT   = Path(__file__).parent / 'outputs'
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 

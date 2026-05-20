@@ -1,6 +1,5 @@
 # ClaimSetu — Problem Statement
 
-**Competition**: [Gemma 4 Good Hackathon](https://www.kaggle.com/competitions/gemma-4-good-hackathon) on Kaggle  
 **Domain**: Public health insurance & equitable healthcare access  
 **Focus**: Explainable claim-review assistance for messy, real-world hospital documentation
 
@@ -110,12 +109,12 @@ Reviewers remain accountable for every claim decision. The assistant’s role is
 
 ---
 
-## Design constraints (Gemma 4 Good)
+## Design constraints
 
 - Run **locally** on consumer hardware where possible; avoid reliance on external APIs for core inference.
 - Use a **hybrid evidence pipeline**: **PaddleOCR + PyTesseract** for traceable document reading (text, lines, bounding boxes, confidence); **Gemma 4 E4B** for edge-friendly page cleanup, triage, and structured extraction; **Gemma 4 26B** for claim-level reasoning, package rules, and reviewer recommendations.
 - Do **not** use a language model as a black-box OCR replacement — claim review requires auditable provenance at the line level.
-- Do **not** rely on **Gemma 4 31B** for this submission — prioritise stable demo, reproducible outputs, and practical local execution.
+- Do **not** rely on **Gemma 4 31B** for the default prototype — prioritise stable local execution, reproducible outputs, and practical deployment on consumer hardware.
 - Prioritise **transparency**: every recommendation traceable to source documents, OCR evidence, and rule checks.
 - Optimise for **public good**: faster, fairer, more consistent claim review that reduces friction for patients and providers in publicly funded insurance programmes.
 

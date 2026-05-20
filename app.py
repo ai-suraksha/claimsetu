@@ -1,6 +1,5 @@
 """
 ClaimSetu — FastAPI app + demo UI
-Gemma 4 Good Hackathon (Kaggle)
 
 Run:
     uv run uvicorn app:app --reload

@@ -223,9 +223,8 @@ outputs/
 .venv/
 *.egg-info/
 
-# sample_outputs/ is intentionally committed — contains one anonymised claim
-# output (decision.json, classification.csv, timeline.csv) and public STG PDFs.
-# Do NOT add sample_outputs/ here.
+# Local pipeline outputs (regenerate via regenerate_sample.py; not committed)
+sample_outputs/
 
 # macOS
 .DS_Store

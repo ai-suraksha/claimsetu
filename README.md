@@ -1,6 +1,8 @@
 # ClaimSetu
 
-ClaimSetu is an offline, explainable claim-review assistant for public health insurance workflows.
+ClaimSetu is a local-first, evidence-backed claim-review assistant for public health insurance workflows.
+
+OCR captures traceable evidence, Gemma 4 structures and explains it, deterministic validators enforce safety, and human reviewers make the final decision.
 
 It reads mixed-quality healthcare claim documents, extracts structured evidence, builds an episode timeline, checks package-level rules, and generates a reviewer-ready recommendation with provenance.
 
@@ -10,7 +12,9 @@ ClaimSetu is designed for human-in-the-loop review. It does not make autonomous 
 
 ---
 
-## What it does
+## Problem
+
+Public health insurance schemes process millions of hospital claims. Many arrive as mixed-quality PDFs, scans, photographs, discharge summaries, lab reports, bills, and clinical notes.
 
 For each claim packet, ClaimSetu helps reviewers answer:
 
@@ -22,23 +26,18 @@ Outputs include a **PASS / CONDITIONAL / REVIEW** recommendation, prioritised re
 
 ---
 
-## Why hybrid OCR + Gemma?
+## Demo assets
 
-ClaimSetu does **not** use a language model as a black-box OCR engine.
+Static materials for walkthroughs and presentations (also listed in the repository table below):
 
-Healthcare claim review requires traceability: source document, page number, extracted text, bounding boxes, confidence, and evidence provenance.
+| Asset | Purpose |
+|-------|---------|
+| [demo/ClaimSetu_Design.pdf](demo/ClaimSetu_Design.pdf) | Five-slide overview: problem, solution, architecture, demo framing |
+| [demo/ClaimSetu_Architecture.png](demo/ClaimSetu_Architecture.png) | Architecture diagram: OCR → E4B → validators → 26B → reviewer |
+| [demo/claimsetu_thumbnail.png](demo/claimsetu_thumbnail.png) | Project thumbnail / media asset |
+| [demo/index.html](demo/index.html) | Interactive demo UI (served at `/demo` when the app is running) |
 
-Therefore, ClaimSetu uses **PaddleOCR** and **PyTesseract** for document reading, then uses **Gemma 4** models for understanding and reasoning:
-
-| Layer | Role | Tool / model |
-|-------|------|----------------|
-| **Document reading** | Raw text, lines, bounding boxes, confidence | PaddleOCR + PyTesseract |
-| **Edge understanding** | OCR cleanup, page triage, lightweight classification, structured extraction from noisy text | **Gemma 4 E4B** |
-| **Claim reasoning** | Timeline interpretation, package/STG rules, contradictions, reviewer recommendation | **Gemma 4 26B** |
-
-**OCR engines read the document. Gemma understands the claim.**
-
-Gemma 4 E4B is **not** a replacement for the OCR pipeline. It is an edge-friendly layer on top of OCR for cleanup and structuring. Gemma 4 31B is intentionally **not** used — it adds complexity without enough scoring upside for a stable, reproducible demo.
+**Live demo:** after setup, run `uv run uvicorn app:app --reload` and open [http://localhost:8000/demo](http://localhost:8000/demo). For direct batch runs, place files under `Data/claims-data/`. For the web UI, upload files directly.
 
 ---
 
@@ -69,7 +68,25 @@ uv run uvicorn app:app --reload
 uv run python claimsAssistant.py
 ```
 
+Place claim documents under `Data/claims-data/<PACKAGE_CODE>/<CLAIM_ID>/` (see [Data](#data)).
+
 ---
+
+## Architecture
+
+ClaimSetu does **not** use a language model as a black-box OCR engine.
+
+Healthcare claim review requires traceability: source document, page number, extracted text, bounding boxes, confidence, and evidence provenance.
+
+| Layer | Role | Tool / model |
+|-------|------|----------------|
+| **Document reading** | Raw text, lines, bounding boxes, confidence | PaddleOCR + PyTesseract |
+| **Edge understanding** | OCR cleanup, page triage, lightweight classification, structured extraction from noisy text | **Gemma 4 E4B** |
+| **Claim reasoning** | Timeline interpretation, package/STG rules, contradictions, reviewer recommendation | **Gemma 4 26B** |
+
+**OCR engines read the document. Gemma understands the claim.**
+
+Gemma 4 E4B is **not** a replacement for the OCR pipeline. It is an edge-friendly layer on top of OCR for cleanup and structuring. The default stack uses **E4B** and **26B** for predictable local execution; Gemma 4 31B is not part of the default configuration.
 
 ```
 Input claim packet
@@ -107,6 +124,23 @@ ClaimSetu is a **reviewer co-pilot**, not an autonomous adjudicator.
 
 ---
 
+## Privacy
+
+- This repository does **not** include real patient, hospital, or claim documents.  
+- `Data/` is gitignored; use only user-provided or synthetic inputs locally.  
+- Private evaluation data and raw claim documents are not redistributed.
+
+---
+
+## Limitations
+
+- **Prototype scope** — single-file pipeline (`claimsAssistant.py`) optimised for clarity and local iteration, not production scale-out.  
+- **Package-specific rules** — STG configs in `knowledgeBase/` cover a fixed set of packages; other schemes need new rule definitions.  
+- **OCR-dependent quality** — scanned, handwritten, or low-contrast pages may yield unverifiable slots and more **CONDITIONAL** outcomes.  
+- **Not adjudication** — outputs are decision-support only; reviewers and scheme governance remain accountable for every claim decision.
+
+---
+
 ## Repository
 
 | File / Folder | Description |
@@ -117,8 +151,10 @@ ClaimSetu is a **reviewer co-pilot**, not an autonomous adjudicator.
 | [app.py](app.py) | FastAPI web app + demo UI (`/demo`) |
 | [pyproject.toml](pyproject.toml) | uv project config and dependencies |
 | [demo/index.html](demo/index.html) | Standalone demo UI for recording (served at `/demo`) |
+| [demo/ClaimSetu_Design.pdf](demo/ClaimSetu_Design.pdf) | Five-slide overview deck covering problem, solution, architecture, and demo framing |
+| [demo/ClaimSetu_Architecture.png](demo/ClaimSetu_Architecture.png) | Architecture image showing OCR → E4B → validators → 26B → reviewer workflow |
+| [demo/claimsetu_thumbnail.png](demo/claimsetu_thumbnail.png) | Project thumbnail / media asset |
 | [knowledgeBase/](knowledgeBase/) | Standard Treatment Guidelines (4 STG PDFs — MG064A, SG039C, MG006A, SB039A) |
-| [sample_outputs/](sample_outputs/) | One anonymised sample claim output (decision, classification, timeline) |
 
 ---
 
@@ -129,19 +165,29 @@ The pipeline was validated on a private set of 40 real-world health insurance cl
 | Metric | Notes |
 |--------|-------|
 | Document classification | Tier 1/2 (filename + keyword) correct on the majority of pages; Tier 3 (E4B) handles ambiguous pages |
-| Mandatory slot fill rate | 4 of 5 slots filled on the sample claim; pre-treatment evidence the most common gap on scanned packets |
+| Mandatory slot fill rate | 4 of 5 slots filled on a held-out validation claim; pre-treatment evidence the most common gap on scanned packets |
 | Date extraction | DOA/DOD extracted where digital text present; correctly marked unverifiable on scanned/handwritten pages |
 | Hallucinated-date rejection | Dates contradicting source documents rejected by the 4-condition acceptance gate |
 
-Private evaluation data and raw claim documents are not redistributed.
+---
 
 ## Prototype structure
 
-For hackathon reproducibility, the core pipeline is kept in a single file (`claimsAssistant.py`), organised internally by pipeline stage. A production version would split this into modules: ocr, classification, timeline, rules, reasoning.
+For prototype reproducibility, the core pipeline is kept in a single file (`claimsAssistant.py`), organised internally by pipeline stage. A production version would split this into modules: ocr, classification, timeline, rules, reasoning.
+
+---
 
 ## Data
 
-This repository does **not** include real patient, hospital, or claim documents. All filenames in `sample_outputs/` have been anonymised — name-like fragments removed. Demo inputs should be user-provided or synthetic.
+Claim inputs are expected under:
+
+```
+Data/claims-data/<PACKAGE_CODE>/<CLAIM_ID>/*.pdf
+```
+
+`Data/` is not committed. Demo inputs should be user-provided or synthetic.
+
+---
 
 ## License
 
